@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligence Architecture - Interactive Brain Data Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #131829;
+            --accent-cyan: #00f0ff;
+            --accent-purple: #b86bff;
+            --accent-green: #00ff88;
+            --accent-orange: #ff8c42;
+            --accent-red: #ff4757;
+            --text-primary: #ffffff;
+            --text-secondary: #8892b0;
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1f3a 100%);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .brain-section {
+            width: 45%;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            overflow: hidden;
+            border-right: 2px solid rgba(0, 240, 255, 0.1);
+        }
+
+        .title-header {
+            position: absolute;
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            width: 90%;
+        }
+
+        .title-header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(45deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+            margin-bottom: 0.5rem;
+        }
+
+        .title-header p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .brain-container {
+            position: relative;
+            margin-top: 6rem;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .brain-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .analytics-section {
+            width: 55%;
+            margin-left: 45%;
+            padding: 2rem;
+            overflow-y: auto;
+            min-height: 100vh;
+            background: rgba(19, 24, 41, 0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .analytics-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, var(--accent-cyan), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.05) 0%, rgba(184, 107, 255, 0.05) 100%);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 10px 30px rgba(0, 240, 255, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--accent-cyan);
+        }
+
+        .chart-container {
+            background: rgba(10, 14, 39, 0.6);
+            border: 1px solid rgba(0, 240, 255, 0.15);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .chart-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+
+        .placeholder {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .placeholder h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--accent-purple);
+        }
+
+        .placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .grid-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.1;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 4px;
+        }
+
+        .department-info {
+            background: rgba(0, 240, 255, 0.05);
+            border-left: 3px solid var(--accent-cyan);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+        }
+
+        .department-info h3 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+        }
+
+        .region-hint {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            animation: pulse-hint 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-hint {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .brain-section, .analytics-section {
+                width: 100%;
+                border-right: none;
+            }
+            
+            .brain-section {
+                border-bottom: 2px solid rgba(0, 240, 255, 0.1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <svg class="grid-background"></svg>
+    
+    <div class="container">
+        <div class="brain-section">
+            <div class="title-header">
+                <h1>INTELLIGENCE ARCHITECTURE</h1>
+                <p>Interactive Department Analytics</p>
+            </div>
+            
+            <div class="brain-container">
+                <img src="Gemini_Generated_Image_l7voaal7voaal7vo.png" 
+                     alt="Brain Intelligence Architecture" 
+                     class="brain-image" 
+                     usemap="#brainmap">
+                
+                <map name="brainmap">
+                    <!-- Memory & Learning (Science) - Golden/Yellow top region -->
+                    <area shape="poly" 
+      coords="
+      260,160,
+      300,140,
+      360,160,
+      400,200,
+      420,240,
+      400,280,
+      360,300,
+      300,310,
+      260,310,
+      200,300,
+      160,280,
+      140,240,
+      160,200,
+      200,160"
+      alt="Science Department" 
+      data-dept="Science" 
+      data-region="Memory & Learning"
+      title="Science - Memory & Learning"
+      href="javascript:void(0);">
+
+
+                    
+                    <!-- Logic & Reasoning (Engineering) - Blue center region -->
+                <area shape="poly" 
+      coords="
+      380,320,
+      450,330,
+      160,330,
+      230,320,
+      400,130,
+      420,140,
+      420,310,
+      400,350,
+      360,380,
+      300,400,
+      120,410,
+      420,400,
+      360,380,
+      320,350,
+      300,310,
+      300,140,
+      320,350"
+      alt="Engineering Department"
+      data-dept="Engineering"
+      data-region="Logic & Reasoning"
+      title="Engineering - Logic & Reasoning"
+      href="javascript:void(0);">
+
+
+
+
+
+
+
+
+
+
+
+                    <!-- Problem-Solving (Medical) - Red bottom region -->
+                   <area shape="poly" 
+      coords="
+      280,410,
+      350,420,
+      420,420,
+      490,410,
+      540,440,
+      560,480,
+      560,530,
+      540,570,
+      500,600,
+      440,620,
+      380,630,
+      320,620,
+      260,600,
+      220,570,
+      200,530,
+      200,480,
+      220,440"
+      alt="Medical Department"
+      data-dept="Medical"
+      data-region="Problem-Solving"
+      title="Medical - Problem-Solving"
+      href="javascript:void(0);">
+
+
+
+
+
+                    <!-- Creativity & Innovation (Arts) - Green left region -->
+                    <area shape="poly" 
+                          coords="80,300, 120,280, 160,290, 190,320, 210,370, 220,420, 220,470, 210,520, 190,560, 160,590, 120,600, 80,580, 50,540, 40,490, 40,440, 50,390, 70,340" 
+                          alt="Arts Department" 
+                          data-dept="Arts" 
+                          data-region="Creativity & Innovation"
+                          title="Arts - Creativity & Innovation"
+                          href="javascript:void(0);">
+                    
+                    <!-- Emotional Intelligence (Business) - Purple right region -->
+                  <area shape="poly" 
+      coords="
+      360,0,
+      400,-20,
+      440,-10,
+      470,20,
+      490,70,
+      500,120,
+      500,170,
+      490,220,
+      470,460,
+      440,490,
+      400,500,
+      360,480,
+      330,440,
+      320,390,
+      320,340,
+      330,290,
+      350,240"
+      alt="Business Department" 
+      data-dept="Business" 
+      data-region="Emotional Intelligence"
+      title="Business - Emotional Intelligence"
+      href="javascript:void(0);">
+
+
+
+
+
+                </map>
+            </div>
+            
+            <div class="region-hint">
+                Click on any brain region to explore analytics
+            </div>
+        </div>
+        
+        <div class="analytics-section" id="analytics">
+            <div class="placeholder">
+                <div class="placeholder-icon">🧠</div>
+                <h2>SELECT A BRAIN REGION</h2>
+                <p>Click on any colored section of the brain to explore comprehensive department analytics</p>
+                <br>
+                <p style="font-size: 0.9rem; color: var(--text-secondary);">
+                    <strong>Available Regions:</strong><br>
+                    🟡 Top (Gold) - Science<br>
+                    🔵 Center (Blue) - Engineering<br>
+                    🔴 Bottom (Red) - Medical<br>
+                    🟢 Left (Green) - Arts<br>
+                    🟣 Right (Purple) - Business
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Department configuration
+        const departments = {
+            'Science': { 
+                color: '#FFD700',
+                region: 'Memory & Learning',
+                description: 'Exploring knowledge acquisition and retention'
+            },
+            'Engineering': { 
+                color: '#4169E1',
+                region: 'Logic & Reasoning',
+                description: 'Analytical thinking and problem decomposition'
+            },
+            'Medical': { 
+                color: '#DC143C',
+                region: 'Problem-Solving',
+                description: 'Critical diagnosis and systematic solutions'
+            },
+            'Arts': { 
+                color: '#32CD32',
+                region: 'Creativity & Innovation',
+                description: 'Imaginative expression and novel thinking'
+            },
+            'Business': { 
+                color: '#9370DB',
+                region: 'Emotional Intelligence',
+                description: 'Interpersonal skills and strategic awareness'
+            }
+        };
+
+        let studentData = [];
+        let activeCharts = {};
+
+        // Create grid background
+        const gridSvg = d3.select('.grid-background')
+            .attr('width', window.innerWidth)
+            .attr('height', window.innerHeight);
+
+        for (let i = 0; i < window.innerWidth; i += 40) {
+            gridSvg.append('line')
+                .attr('x1', i).attr('y1', 0)
+                .attr('x2', i).attr('y2', window.innerHeight)
+                .attr('stroke', 'rgba(0, 240, 255, 0.1)')
+                .attr('stroke-width', 1);
+        }
+
+        for (let i = 0; i < window.innerHeight; i += 40) {
+            gridSvg.append('line')
+                .attr('x1', 0).attr('y1', i)
+                .attr('x2', window.innerWidth).attr('y2', i)
+                .attr('stroke', 'rgba(0, 240, 255, 0.1)')
+                .attr('stroke-width', 1);
+        }
+
+        // Set up image map area click handlers
+        document.querySelectorAll('area').forEach(area => {
+            area.addEventListener('click', function(e) {
+                e.preventDefault();
+                const dept = this.getAttribute('data-dept');
+                loadDepartmentAnalytics(dept);
+            });
+            
+            area.addEventListener('mouseenter', function() {
+                this.style.cursor = 'pointer';
+            });
+        });
+
+        // Load CSV data
+        async function loadData() {
+            try {
+                const response = await fetch('students_updated.csv');
+                const text = await response.text();
+                studentData = d3.csvParse(text);
+                
+                // Convert numeric fields
+                studentData.forEach(d => {
+                    d.Age = +d.Age;
+                    d.CGPA = +d.CGPA;
+                    d.Sleep_Duration = +d.Sleep_Duration;
+                    d.Study_Hours = +d.Study_Hours;
+                    d.Social_Media_Hours = +d.Social_Media_Hours;
+                    d.Physical_Activity = +d.Physical_Activity;
+                    d.Stress_Level = +d.Stress_Level;
+                    d.Depression = d.Depression === 'True';
+                    d.Instagram = +d.Instagram;
+                    d.LinkedIn = +d.LinkedIn;
+                    d.WhatsApp = +d.WhatsApp;
+                    d.Snapchat = +d.Snapchat;
+                    d.YouTube = +d.YouTube;
+                    d.Netflix = +d.Netflix;
+                    d.Others = +d.Others;
+                });
+                
+                console.log('Data loaded:', studentData.length, 'students');
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function loadDepartmentAnalytics(department) {
+            const deptData = studentData.filter(d => d.Department === department);
+            const deptConfig = departments[department];
+            const analyticsDiv = d3.select('#analytics');
+            
+            // Clear previous charts
+            Object.values(activeCharts).forEach(chart => chart.destroy());
+            activeCharts = {};
+            
+            analyticsDiv.html(`
+                <div class="analytics-header">${department.toUpperCase()} DEPARTMENT</div>
+                
+                <div class="department-info">
+                    <h3>${deptConfig.region}</h3>
+                    <p>${deptConfig.description}</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Students</div>
+                        <div class="stat-value">${deptData.length.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg CGPA</div>
+                        <div class="stat-value">${d3.mean(deptData, d => d.CGPA).toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg Study Hours</div>
+                        <div class="stat-value">${d3.mean(deptData, d => d.Study_Hours).toFixed(1)}h</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Depression Rate</div>
+                        <div class="stat-value">${(d3.sum(deptData, d => d.Depression ? 1 : 0) / deptData.length * 100).toFixed(1)}%</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Gender Distribution</div>
+                    <canvas id="genderChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">CGPA Distribution</div>
+                    <canvas id="cgpaChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Study Hours vs CGPA Correlation</div>
+                    <canvas id="scatterChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Social Media Platform Usage (Avg Hours)</div>
+                    <canvas id="socialMediaChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Stress Level Distribution</div>
+                    <canvas id="stressChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Age Distribution</div>
+                    <canvas id="ageChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Sleep Duration vs Stress Level</div>
+                    <canvas id="sleepStressChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Physical Activity Distribution</div>
+                    <canvas id="activityChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Depression vs Non-Depression Comparison</div>
+                    <canvas id="depressionChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">Study Hours Distribution</div>
+                    <canvas id="studyHoursChart"></canvas>
+                </div>
+            `);
+            
+            createCharts(deptData, department);
+        }
+
+        function createCharts(data, department) {
+            const color = departments[department].color;
+            
+            // 1. Gender Distribution
+            const genderCounts = d3.rollup(data, v => v.length, d => d.Gender);
+            activeCharts.gender = new Chart(document.getElementById('genderChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Array.from(genderCounts.keys()),
+                    datasets: [{
+                        data: Array.from(genderCounts.values()),
+                        backgroundColor: ['rgba(0, 240, 255, 0.7)', 'rgba(184, 107, 255, 0.7)'],
+                        borderColor: ['#00f0ff', '#b86bff'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { labels: { color: '#ffffff', font: { size: 14 } } }
+                    }
+                }
+            });
+            
+            // 2. CGPA Distribution
+            const cgpaHist = d3.bin()
+                .domain([0, 4])
+                .thresholds(20)(data.map(d => d.CGPA));
+            
+            activeCharts.cgpa = new Chart(document.getElementById('cgpaChart'), {
+                type: 'bar',
+                data: {
+                    labels: cgpaHist.map(d => `${d.x0.toFixed(1)}-${d.x1.toFixed(1)}`),
+                    datasets: [{
+                        label: 'Student Count',
+                        data: cgpaHist.map(d => d.length),
+                        backgroundColor: `${color}B3`,
+                        borderColor: color,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { ticks: { color: '#8892b0' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: { ticks: { color: '#8892b0' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 3. Study Hours vs CGPA Scatter
+            activeCharts.scatter = new Chart(document.getElementById('scatterChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Students',
+                        data: data.map(d => ({ x: d.Study_Hours, y: d.CGPA })),
+                        backgroundColor: `${color}80`,
+                        borderColor: color,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Study Hours', color: '#ffffff' },
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: { 
+                            title: { display: true, text: 'CGPA', color: '#ffffff' },
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 4. Social Media Usage
+            const platforms = ['Instagram', 'LinkedIn', 'WhatsApp', 'Snapchat', 'YouTube', 'Netflix', 'Others'];
+            const avgUsage = platforms.map(p => d3.mean(data, d => d[p]));
+            
+            activeCharts.social = new Chart(document.getElementById('socialMediaChart'), {
+                type: 'bar',
+                data: {
+                    labels: platforms,
+                    datasets: [{
+                        label: 'Avg Hours',
+                        data: avgUsage,
+                        backgroundColor: [
+                            'rgba(255, 107, 129, 0.7)',
+                            'rgba(0, 119, 181, 0.7)',
+                            'rgba(37, 211, 102, 0.7)',
+                            'rgba(255, 252, 0, 0.7)',
+                            'rgba(255, 0, 0, 0.7)',
+                            'rgba(229, 9, 20, 0.7)',
+                            'rgba(184, 107, 255, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { ticks: { color: '#8892b0' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: { ticks: { color: '#8892b0' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 5. Stress Level Distribution
+            const stressCounts = d3.rollup(data, v => v.length, d => d.Stress_Level);
+            const stressLabels = Array.from(stressCounts.keys()).sort((a, b) => a - b);
+            
+            activeCharts.stress = new Chart(document.getElementById('stressChart'), {
+                type: 'line',
+                data: {
+                    labels: stressLabels,
+                    datasets: [{
+                        label: 'Student Count',
+                        data: stressLabels.map(l => stressCounts.get(l)),
+                        backgroundColor: 'rgba(255, 71, 87, 0.2)',
+                        borderColor: '#ff4757',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Stress Level', color: '#ffffff' },
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: { 
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 6. Age Distribution
+            const ageCounts = d3.rollup(data, v => v.length, d => d.Age);
+            const ageLabels = Array.from(ageCounts.keys()).sort((a, b) => a - b);
+            
+            activeCharts.age = new Chart(document.getElementById('ageChart'), {
+                type: 'bar',
+                data: {
+                    labels: ageLabels,
+                    datasets: [{
+                        label: 'Student Count',
+                        data: ageLabels.map(l => ageCounts.get(l)),
+                        backgroundColor: 'rgba(0, 255, 136, 0.7)',
+                        borderColor: '#00ff88',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Age', color: '#ffffff' },
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: { 
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 7. Sleep vs Stress Scatter
+            activeCharts.sleepStress = new Chart(document.getElementById('sleepStressChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Students',
+                        data: data.map(d => ({ x: d.Sleep_Duration, y: d.Stress_Level })),
+                        backgroundColor: 'rgba(0, 240, 255, 0.5)',
+                        borderColor: '#00f0ff',
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Sleep Duration (hours)', color: '#ffffff' },
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: { 
+                            title: { display: true, text: 'Stress Level', color: '#ffffff' },
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 8. Physical Activity Distribution
+            const activityHist = d3.bin()
+                .domain([0, d3.max(data, d => d.Physical_Activity)])
+                .thresholds(15)(data.map(d => d.Physical_Activity));
+            
+            activeCharts.activity = new Chart(document.getElementById('activityChart'), {
+                type: 'bar',
+                data: {
+                    labels: activityHist.map(d => `${Math.round(d.x0)}-${Math.round(d.x1)}`),
+                    datasets: [{
+                        label: 'Student Count',
+                        data: activityHist.map(d => d.length),
+                        backgroundColor: 'rgba(184, 107, 255, 0.7)',
+                        borderColor: '#b86bff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Physical Activity (minutes)', color: '#ffffff' },
+                            ticks: { color: '#8892b0', maxRotation: 45, minRotation: 45 },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: { 
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 9. Depression Comparison
+            const depressed = data.filter(d => d.Depression);
+            const notDepressed = data.filter(d => !d.Depression);
+            
+            activeCharts.depression = new Chart(document.getElementById('depressionChart'), {
+                type: 'radar',
+                data: {
+                    labels: ['Avg CGPA', 'Study Hours', 'Sleep Hours', 'Social Media', 'Stress Level', 'Physical Activity'],
+                    datasets: [{
+                        label: 'With Depression',
+                        data: [
+                            d3.mean(depressed, d => d.CGPA),
+                            d3.mean(depressed, d => d.Study_Hours),
+                            d3.mean(depressed, d => d.Sleep_Duration),
+                            d3.mean(depressed, d => d.Social_Media_Hours),
+                            d3.mean(depressed, d => d.Stress_Level),
+                            d3.mean(depressed, d => d.Physical_Activity) / 10
+                        ],
+                        backgroundColor: 'rgba(255, 71, 87, 0.2)',
+                        borderColor: '#ff4757',
+                        borderWidth: 2
+                    }, {
+                        label: 'Without Depression',
+                        data: [
+                            d3.mean(notDepressed, d => d.CGPA),
+                            d3.mean(notDepressed, d => d.Study_Hours),
+                            d3.mean(notDepressed, d => d.Sleep_Duration),
+                            d3.mean(notDepressed, d => d.Social_Media_Hours),
+                            d3.mean(notDepressed, d => d.Stress_Level),
+                            d3.mean(notDepressed, d => d.Physical_Activity) / 10
+                        ],
+                        backgroundColor: 'rgba(0, 255, 136, 0.2)',
+                        borderColor: '#00ff88',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        r: {
+                            ticks: { color: '#8892b0', backdropColor: 'transparent' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            pointLabels: { color: '#ffffff' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+            
+            // 10. Study Hours Distribution
+            const studyHist = d3.bin()
+                .domain([0, d3.max(data, d => d.Study_Hours)])
+                .thresholds(15)(data.map(d => d.Study_Hours));
+            
+            activeCharts.studyHours = new Chart(document.getElementById('studyHoursChart'), {
+                type: 'line',
+                data: {
+                    labels: studyHist.map(d => `${d.x0.toFixed(1)}-${d.x1.toFixed(1)}`),
+                    datasets: [{
+                        label: 'Student Count',
+                        data: studyHist.map(d => d.length),
+                        backgroundColor: 'rgba(255, 140, 66, 0.2)',
+                        borderColor: '#ff8c42',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Study Hours', color: '#ffffff' },
+                            ticks: { color: '#8892b0', maxRotation: 45, minRotation: 45 },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: { 
+                            ticks: { color: '#8892b0' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#ffffff' } }
+                    }
+                }
+            });
+        }
+
+        // Initialize
+        loadData();
+    </script>
+</body>
+</html>
