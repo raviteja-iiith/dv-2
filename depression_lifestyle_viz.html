@@ -1,972 +1,786 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Depression & Lifestyle Analysis</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q3 — The Depression Risk Observatory</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a14;
+    --card: #111120;
+    --card2: #161628;
+    --border: rgba(255,255,255,0.07);
+    --dep: #ef4444;
+    --nodep: #3b82f6;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #f59e0b;
+    --font-mono: 'Space Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; overflow-x:hidden; }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-            min-height: 100vh;
-        }
+  #loadingScreen {
+    position:fixed; inset:0; z-index:999;
+    background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+  }
+  #loadingScreen::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse 60% 60% at 30% 40%, rgba(239,68,68,0.07) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 50% at 70% 60%, rgba(59,130,246,0.05) 0%, transparent 70%);
+    pointer-events:none;
+  }
+  .loading-title { font-family:var(--font-mono); font-size:22px; font-weight:700; color:#fff; text-align:center; }
+  .loading-title span { color:var(--dep); }
+  .loading-bar-wrap { width:240px; height:2px; background:rgba(255,255,255,0.07); border-radius:2px; overflow:hidden; }
+  .loading-bar-fill { height:100%; width:0%; background:var(--dep); border-radius:2px; animation: loadpulse 1.6s ease-in-out infinite; }
+  @keyframes loadpulse {
+    0%   { width:0%;  margin-left:0; }
+    50%  { width:60%; margin-left:20%; }
+    100% { width:0%;  margin-left:100%; }
+  }
+  .loading-msg { font-family:var(--font-mono); font-size:11px; color:var(--muted); letter-spacing:0.15em; }
+  .loading-error { font-family:var(--font-mono); font-size:12px; color:var(--dep); max-width:420px; text-align:center; line-height:1.7; padding:0 24px; display:none; }
 
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
+  #appScreen { display:none; }
 
-        h1 {
-            text-align: center;
-            color: #2d3748;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-            font-weight: 700;
-        }
+  .observatory-header { padding:32px 48px 24px; border-bottom:1px solid var(--border); position:relative; overflow:hidden; }
+  .observatory-header::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse 60% 80% at 30% -20%, rgba(239,68,68,0.08) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 60% at 80% 50%, rgba(59,130,246,0.05) 0%, transparent 70%);
+    pointer-events:none;
+  }
+  .header-label { font-family:var(--font-mono); font-size:11px; letter-spacing:0.2em; color:var(--muted); text-transform:uppercase; margin-bottom:10px; }
+  .header-title { font-family:var(--font-mono); font-size:26px; font-weight:700; color:#fff; line-height:1.1; margin-bottom:8px; }
+  .header-title span { color:var(--dep); }
+  .header-sub { font-size:13px; color:var(--muted); max-width:600px; line-height:1.6; }
+  .header-stats { display:flex; gap:28px; margin-top:20px; flex-wrap:wrap; }
+  .hstat { display:flex; flex-direction:column; gap:3px; }
+  .hstat-val { font-family:var(--font-mono); font-size:20px; font-weight:700; color:#fff; }
+  .hstat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+  .dep-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--dep); margin-right:5px; }
+  .nodep-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--nodep); margin-right:5px; }
 
-        .subtitle {
-            text-align: center;
-            color: #718096;
-            margin-bottom: 30px;
-            font-size: 1.1em;
-        }
+  #filterBar { display:none; padding:10px 48px; background:rgba(239,68,68,0.06); border-bottom:1px solid rgba(239,68,68,0.15); align-items:center; gap:10px; flex-wrap:wrap; }
+  #filterBar.active { display:flex; }
+  .filter-label { font-family:var(--font-mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.15em; margin-right:4px; }
+  .filter-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:var(--dep); font-family:var(--font-mono); font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer; transition:all 0.2s; }
+  .filter-badge:hover { background:rgba(239,68,68,0.25); }
+  .filter-badge .x { opacity:0.6; font-size:12px; }
+  .clear-all { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--muted); cursor:pointer; text-decoration:underline; letter-spacing:0.05em; }
+  .clear-all:hover { color:var(--text); }
 
-        .question-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            text-align: center;
-        }
+  /* FIX: use padding on cards, not margin subtraction */
+  .dashboard { display:grid; grid-template-columns:1fr 1fr; gap:2px; background:rgba(255,255,255,0.03); padding:2px; }
+  .chart-card { background:var(--card); padding:28px 32px; transition:background 0.2s; position:relative; overflow:hidden; }
+  .chart-card:hover { background:var(--card2); }
+  .chart-card.full-width { grid-column:1 / -1; }
+  .chart-num { font-family:var(--font-mono); font-size:10px; color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; }
+  .chart-title { font-family:var(--font-mono); font-size:16px; font-weight:700; color:#fff; margin:6px 0 4px; line-height:1.3; }
+  .chart-sub { font-size:12px; color:var(--muted); margin-bottom:20px; line-height:1.5; }
+  .insight-box { margin-top:14px; padding:10px 14px; background:rgba(245,158,11,0.06); border-left:2px solid var(--accent); font-size:12px; color:#cbd5e0; line-height:1.5; }
+  .insight-box strong { color:var(--accent); font-family:var(--font-mono); }
 
-        .question-box h2 {
-            font-size: 1.5em;
-            margin-bottom: 10px;
-        }
+  .tooltip { position:fixed; pointer-events:none; background:rgba(10,10,20,0.97); border:1px solid rgba(255,255,255,0.1); padding:12px 16px; border-radius:6px; font-size:12px; line-height:1.7; z-index:9999; max-width:260px; box-shadow:0 8px 32px rgba(0,0,0,0.6); display:none; }
+  .tooltip strong { color:var(--accent); font-family:var(--font-mono); }
+  .tooltip .t-dep { color:var(--dep); }
+  .tooltip .t-nodep { color:var(--nodep); }
 
-        .viz-section {
-            margin-bottom: 50px;
-        }
+  .controls-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .ctrl-btn { font-family:var(--font-mono); font-size:11px; padding:5px 12px; border-radius:3px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; letter-spacing:0.05em; transition:all 0.2s; }
+  .ctrl-btn.active, .ctrl-btn:hover { background:rgba(255,255,255,0.07); color:var(--text); border-color:rgba(255,255,255,0.2); }
+  .ctrl-select { font-family:var(--font-mono); font-size:11px; padding:5px 10px; border-radius:3px; border:1px solid var(--border); background:var(--card); color:var(--muted); cursor:pointer; outline:none; }
+  .ctrl-select:focus { border-color:rgba(255,255,255,0.2); color:var(--text); }
+  .legend { display:flex; gap:20px; align-items:center; margin-bottom:16px; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .legend-swatch { width:12px; height:12px; border-radius:2px; }
 
-        .viz-title {
-            font-size: 1.4em;
-            color: #2d3748;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid #667eea;
-        }
+  svg text { font-family:var(--font-body); }
+  .axis text { fill:var(--muted); font-size:11px; }
+  .axis path, .axis line { stroke:rgba(255,255,255,0.08); }
+  .grid line { stroke:rgba(255,255,255,0.04); }
+  .grid path { stroke:none; }
+  .loading-placeholder { display:flex; align-items:center; justify-content:center; height:200px; color:var(--muted); font-family:var(--font-mono); font-size:12px; letter-spacing:0.1em; }
 
-        .controls {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f7fafc;
-            border-radius: 10px;
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
+  .scatter-controls { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+  .scatter-controls label { font-size:12px; color:var(--muted); font-family:var(--font-mono); letter-spacing:0.05em; }
+  #corrBadge { font-family:var(--font-mono); font-size:20px; font-weight:700; color:var(--accent); margin-left:auto; }
 
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+  .panel-toggle { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .ptbtn { font-family:var(--font-mono); font-size:10px; padding:4px 10px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; border-radius:3px; transition:all 0.2s; }
+  .ptbtn.active { background:var(--dep); border-color:var(--dep); color:#fff; }
 
-        .control-group label {
-            font-weight: 600;
-            color: #4a5568;
-        }
-
-        select {
-            padding: 8px 12px;
-            border: 2px solid #cbd5e0;
-            border-radius: 6px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            max-width: 300px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            z-index: 1000;
-        }
-
-        .tooltip strong {
-            color: #fbbf24;
-        }
-
-        svg {
-            display: block;
-            margin: 0 auto;
-        }
-
-        .axis-label {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .grid line {
-            stroke: #e2e8f0;
-            stroke-opacity: 0.7;
-        }
-
-        .grid path {
-            stroke-width: 0;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 2em;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-    </style>
+  /* FIX: ensure SVGs are responsive */
+  svg { display:block; overflow:visible; }
+  .chart-svg-wrap { width:100%; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>🧠 Student Depression & Lifestyle Analysis</h1>
-        <p class="subtitle">Comprehensive Multi-Parameter Visualization (5000 Students)</p>
 
-        <div class="question-box">
-            <h2>Question 3: Lifestyle Factors and Depression Risk</h2>
-            <p>Which combination of lifestyle factors creates the highest risk for student depression?</p>
-        </div>
+<div id="loadingScreen">
+  <div class="loading-title">The Depression Risk <span>Observatory</span></div>
+  <div class="loading-bar-wrap"><div class="loading-bar-fill"></div></div>
+  <div class="loading-msg" id="loadingMsg">LOADING students_updated.csv…</div>
+  <div class="loading-error" id="loadingError"></div>
+</div>
 
-        <div id="statsSection">
-            <div class="stats-grid" id="statsGrid"></div>
-        </div>
+<div id="appScreen">
+  <header class="observatory-header">
+    <div class="header-label">Q3 — Student Depression Risk</div>
+    <div class="header-title">The Depression Risk <span>Observatory</span></div>
+    <div class="header-sub">Which combination of lifestyle factors creates the highest risk for student depression? Click any chart element to cross-filter all visualizations.</div>
+    <div class="header-stats" id="headerStats"></div>
+  </header>
 
-        <div id="visualizations">
-            <!-- Visualization 1: Parallel Coordinates -->
-            <div class="viz-section">
-                <h3 class="viz-title">📊 Multi-Dimensional Lifestyle Analysis (Parallel Coordinates)</h3>
-                <p style="margin-bottom: 15px; color: #718096;">Each line represents a student. Hover over lines to see individual patterns. Colors indicate depression status.</p>
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Filter by Department:</label>
-                        <select id="deptFilter1">
-                            <option value="all">All Departments</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label>Sample Size:</label>
-                        <select id="sampleSize">
-                            <option value="500">500 students</option>
-                            <option value="1000" selected>1000 students</option>
-                            <option value="2000">2000 students</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="parallel-coords"></div>
-            </div>
+  <div id="filterBar">
+    <span class="filter-label">Active Filters:</span>
+    <div id="filterBadges"></div>
+    <span class="clear-all" onclick="clearAllFilters()">Clear All</span>
+  </div>
 
-            <!-- Visualization 2: Density Map -->
-            <div class="viz-section">
-                <h3 class="viz-title">🔥 Sleep vs Physical Activity Density Map</h3>
-                <p style="margin-bottom: 15px; color: #718096;">Heatmap showing concentration patterns. Darker areas indicate higher student density.</p>
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Depression Status:</label>
-                        <select id="depressionFilter">
-                            <option value="all">All Students</option>
-                            <option value="true">With Depression</option>
-                            <option value="false">Without Depression</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="density-viz"></div>
-            </div>
+  <div class="dashboard">
 
-            <!-- Visualization 3: Radar Charts Comparison -->
-            <div class="viz-section">
-                <h3 class="viz-title">🎯 Lifestyle Pattern Comparison (Radar Charts)</h3>
-                <p style="margin-bottom: 15px; color: #718096;">Compare average lifestyle patterns between students with and without depression across all factors.</p>
-                <div id="radar-viz"></div>
-            </div>
-
-            <!-- Visualization 4: Bubble Matrix -->
-            <div class="viz-section">
-                <h3 class="viz-title">💫 Multi-Factor Bubble Matrix</h3>
-                <p style="margin-bottom: 15px; color: #718096;">Bubble size = student count, X-axis = stress level, Y-axis = sleep duration, Color = CGPA range.</p>
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Department:</label>
-                        <select id="deptFilter2">
-                            <option value="all">All Departments</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="bubble-matrix"></div>
-            </div>
-        </div>
+    <div class="chart-card full-width">
+      <div class="chart-num">01 / RISK FACTOR ANALYSIS</div>
+      <div class="chart-title">What makes depressed students different?</div>
+      <div class="chart-sub">Deviation of depressed group from non-depressed baseline. Longer bar = stronger risk factor.</div>
+      <div class="controls-row">
+        <button class="ctrl-btn active" id="pctBtn" onclick="setDivMode('pct')">% Deviation</button>
+        <button class="ctrl-btn" id="absBtn" onclick="setDivMode('abs')">Absolute Diff</button>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--dep)"></div>Depressed has more</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--nodep)"></div>Depressed has less</div>
+      </div>
+      <div id="chart1" class="chart-svg-wrap"></div>
+      <div class="insight-box" id="insight1"></div>
     </div>
 
-    <div class="tooltip" id="tooltip"></div>
-
-    <script>
-        // Load CSV data from external file
-        let studentData = [];
-        const tooltip = d3.select("#tooltip");
-
-        // Color schemes
-        const depressionColor = d3.scaleOrdinal()
-            .domain([true, false])
-            .range(["#ef4444", "#10b981"]);
-
-        const cgpaColorScale = d3.scaleSequential(d3.interpolateViridis)
-            .domain([0, 4]);
-
-        // Load the CSV file
-        d3.csv('students_updated.csv').then(data => {
-            studentData = data.map(d => ({
-                id: d.Student_ID,
-                age: +d.Age,
-                gender: d.Gender,
-                department: d.Department,
-                cgpa: +d.CGPA,
-                sleep: +d.Sleep_Duration,
-                study: +d.Study_Hours,
-                socialMedia: +d.Social_Media_Hours,
-                physicalActivity: +d.Physical_Activity,
-                stress: +d.Stress_Level,
-                depression: d.Depression === 'True' || d.Depression === 'true'
-            }));
-            
-            initializeVisualizations();
-        }).catch(error => {
-            console.error('Error loading CSV:', error);
-            alert('Please make sure students_updated.csv is in the same folder as this HTML file');
-        });
-
-        function initializeVisualizations() {
-            // Calculate statistics
-            displayStats();
-            
-            // Populate department filters
-            const departments = ['all', ...new Set(studentData.map(d => d.department))];
-            ['deptFilter1', 'deptFilter2'].forEach(filterId => {
-                const select = document.getElementById(filterId);
-                select.innerHTML = departments.map(d => 
-                    `<option value="${d}">${d === 'all' ? 'All Departments' : d}</option>`
-                ).join('');
-            });
-
-            // Create all visualizations
-            createParallelCoordinates();
-            createDensityViz();
-            createRadarCharts();
-            createBubbleMatrix();
-
-            // Add event listeners
-            document.getElementById('deptFilter1').addEventListener('change', createParallelCoordinates);
-            document.getElementById('sampleSize').addEventListener('change', createParallelCoordinates);
-            document.getElementById('depressionFilter').addEventListener('change', createDensityViz);
-            document.getElementById('deptFilter2').addEventListener('change', createBubbleMatrix);
-        }
-
-        function displayStats() {
-            const total = studentData.length;
-            const depressed = studentData.filter(d => d.depression).length;
-            const avgStress = d3.mean(studentData, d => d.stress).toFixed(2);
-            const avgSleep = d3.mean(studentData, d => d.sleep).toFixed(2);
-            const avgCGPA = d3.mean(studentData, d => d.cgpa).toFixed(2);
-
-            const stats = [
-                { label: 'Total Students', value: total.toLocaleString() },
-                { label: 'Depression Rate', value: `${(depressed/total*100).toFixed(1)}%` },
-                { label: 'Avg Stress Level', value: avgStress },
-                { label: 'Avg Sleep (hrs)', value: avgSleep },
-                { label: 'Avg CGPA', value: avgCGPA }
-            ];
-
-            document.getElementById('statsGrid').innerHTML = stats.map(s => `
-                <div class="stat-card">
-                    <div class="stat-value">${s.value}</div>
-                    <div class="stat-label">${s.label}</div>
-                </div>
-            `).join('');
-        }
-
-        function createParallelCoordinates() {
-            const container = document.getElementById('parallel-coords');
-            container.innerHTML = '';
-
-            const margin = {top: 50, right: 80, bottom: 50, left: 80};
-            const width = 1200 - margin.left - margin.right;
-            const height = 500 - margin.top - margin.bottom;
-
-            const svg = d3.select(container)
-                .append('svg')
-                .attr('width', width + margin.left + margin.right)
-                .attr('height', height + margin.top + margin.bottom)
-                .append('g')
-                .attr('transform', `translate(${margin.left},${margin.top})`);
-
-            // Filter data
-            const dept = document.getElementById('deptFilter1').value;
-            const sampleSize = +document.getElementById('sampleSize').value;
-            let filtered = dept === 'all' ? studentData : studentData.filter(d => d.department === dept);
-            
-            // Sample data
-            filtered = d3.shuffle(filtered.slice()).slice(0, sampleSize);
-
-            // Define dimensions
-            const dimensions = [
-                { key: 'sleep', label: 'Sleep (hrs)', scale: d3.scaleLinear().domain([0, 12]).range([height, 0]) },
-                { key: 'study', label: 'Study (hrs)', scale: d3.scaleLinear().domain([0, 12]).range([height, 0]) },
-                { key: 'socialMedia', label: 'Social Media (hrs)', scale: d3.scaleLinear().domain([0, 12]).range([height, 0]) },
-                { key: 'physicalActivity', label: 'Physical Activity', scale: d3.scaleLinear().domain([0, 200]).range([height, 0]) },
-                { key: 'stress', label: 'Stress Level', scale: d3.scaleLinear().domain([0, 10]).range([height, 0]) },
-                { key: 'cgpa', label: 'CGPA', scale: d3.scaleLinear().domain([0, 4]).range([height, 0]) }
-            ];
-
-            const x = d3.scalePoint()
-                .domain(dimensions.map(d => d.key))
-                .range([0, width]);
-
-            // Draw lines
-            const line = d3.line();
-            const path = (d) => {
-                return line(dimensions.map(dim => [x(dim.key), dim.scale(d[dim.key])]));
-            };
-
-            svg.append('g')
-                .selectAll('path')
-                .data(filtered)
-                .join('path')
-                .attr('d', path)
-                .style('fill', 'none')
-                .style('stroke', d => depressionColor(d.depression))
-                .style('opacity', 0.15)
-                .style('stroke-width', 1.5)
-                .on('mouseover', function(event, d) {
-                    d3.select(this)
-                        .style('opacity', 1)
-                        .style('stroke-width', 3)
-                        .raise();
-                    
-                    tooltip.style('opacity', 1)
-                        .html(`
-                            <strong>Student ${d.id}</strong><br>
-                            Depression: ${d.depression ? 'Yes' : 'No'}<br>
-                            CGPA: ${d.cgpa.toFixed(2)}<br>
-                            Sleep: ${d.sleep.toFixed(1)} hrs<br>
-                            Study: ${d.study.toFixed(1)} hrs<br>
-                            Social Media: ${d.socialMedia.toFixed(1)} hrs<br>
-                            Physical Activity: ${d.physicalActivity}<br>
-                            Stress: ${d.stress}/10
-                        `)
-                        .style('left', (event.pageX + 10) + 'px')
-                        .style('top', (event.pageY - 10) + 'px');
-                })
-                .on('mouseout', function() {
-                    d3.select(this)
-                        .style('opacity', 0.15)
-                        .style('stroke-width', 1.5);
-                    tooltip.style('opacity', 0);
-                });
-
-            // Draw axes
-            dimensions.forEach(dim => {
-                const g = svg.append('g')
-                    .attr('transform', `translate(${x(dim.key)},0)`);
-
-                g.append('g')
-                    .call(d3.axisLeft(dim.scale).ticks(6))
-                    .selectAll('text')
-                    .style('font-size', '11px');
-
-                g.append('text')
-                    .attr('y', -20)
-                    .attr('text-anchor', 'middle')
-                    .style('font-size', '13px')
-                    .style('font-weight', '600')
-                    .style('fill', '#2d3748')
-                    .text(dim.label);
-            });
-
-            // Legend
-            const legend = svg.append('g')
-                .attr('transform', `translate(${width - 150}, -30)`);
-
-            [true, false].forEach((dep, i) => {
-                const lg = legend.append('g')
-                    .attr('transform', `translate(${i * 90}, 0)`);
-
-                lg.append('line')
-                    .attr('x1', 0)
-                    .attr('x2', 30)
-                    .attr('y1', 0)
-                    .attr('y2', 0)
-                    .style('stroke', depressionColor(dep))
-                    .style('stroke-width', 3);
-
-                lg.append('text')
-                    .attr('x', 35)
-                    .attr('y', 4)
-                    .style('font-size', '12px')
-                    .text(dep ? 'Depressed' : 'Not Depressed');
-            });
-        }
-
-        function createDensityViz() {
-            const container = document.getElementById('density-viz');
-            container.innerHTML = '';
-
-            const margin = {top: 40, right: 120, bottom: 60, left: 80};
-            const width = 900 - margin.left - margin.right;
-            const height = 600 - margin.top - margin.bottom;
-
-            const svg = d3.select(container)
-                .append('svg')
-                .attr('width', width + margin.left + margin.right)
-                .attr('height', height + margin.top + margin.bottom)
-                .append('g')
-                .attr('transform', `translate(${margin.left},${margin.top})`);
-
-            // Filter data
-            const depFilter = document.getElementById('depressionFilter').value;
-            let filtered = studentData;
-            if (depFilter === 'true') filtered = studentData.filter(d => d.depression);
-            if (depFilter === 'false') filtered = studentData.filter(d => !d.depression);
-
-            // Scales
-            const xScale = d3.scaleLinear()
-                .domain([0, 12])
-                .range([0, width]);
-
-            const yScale = d3.scaleLinear()
-                .domain([0, 200])
-                .range([height, 0]);
-
-            // Create grid-based binning
-            const gridSize = 25;
-            const bins = [];
-            const binMap = new Map();
-
-            filtered.forEach(d => {
-                const xBin = Math.floor(xScale(d.sleep) / gridSize);
-                const yBin = Math.floor(yScale(d.physicalActivity) / gridSize);
-                const key = `${xBin},${yBin}`;
-                
-                if (!binMap.has(key)) {
-                    binMap.set(key, {
-                        x: xBin * gridSize + gridSize/2,
-                        y: yBin * gridSize + gridSize/2,
-                        students: [],
-                        count: 0
-                    });
-                }
-                binMap.get(key).students.push(d);
-                binMap.get(key).count++;
-            });
-
-            binMap.forEach(bin => bins.push(bin));
-
-            // Color scale for density
-            const maxCount = d3.max(bins, d => d.count) || 1;
-            const colorScale = d3.scaleSequential(d3.interpolateYlOrRd)
-                .domain([0, maxCount]);
-
-            // Draw rectangles
-            svg.append('g')
-                .selectAll('rect')
-                .data(bins)
-                .join('rect')
-                .attr('x', d => d.x - gridSize/2)
-                .attr('y', d => d.y - gridSize/2)
-                .attr('width', gridSize)
-                .attr('height', gridSize)
-                .attr('fill', d => colorScale(d.count))
-                .attr('stroke', '#fff')
-                .attr('stroke-width', 0.5)
-                .attr('rx', 3)
-                .attr('opacity', 0.8)
-                .on('mouseover', function(event, d) {
-                    d3.select(this)
-                        .attr('stroke', '#000')
-                        .attr('stroke-width', 2)
-                        .attr('opacity', 1);
-                    
-                    const avgStress = d3.mean(d.students, s => s.stress);
-                    const avgCGPA = d3.mean(d.students, s => s.cgpa);
-                    const avgSleep = d3.mean(d.students, s => s.sleep);
-                    const avgActivity = d3.mean(d.students, s => s.physicalActivity);
-                    
-                    tooltip.style('opacity', 1)
-                        .html(`
-                            <strong>${d.count} students</strong><br>
-                            Avg Sleep: ${avgSleep.toFixed(1)} hrs<br>
-                            Avg Physical Activity: ${avgActivity.toFixed(0)}<br>
-                            Avg Stress: ${avgStress.toFixed(1)}/10<br>
-                            Avg CGPA: ${avgCGPA.toFixed(2)}
-                        `)
-                        .style('left', (event.pageX + 10) + 'px')
-                        .style('top', (event.pageY - 10) + 'px');
-                })
-                .on('mouseout', function() {
-                    d3.select(this)
-                        .attr('stroke', '#fff')
-                        .attr('stroke-width', 0.5)
-                        .attr('opacity', 0.8);
-                    tooltip.style('opacity', 0);
-                });
-
-            // Grid lines
-            svg.append('g')
-                .attr('class', 'grid')
-                .attr('transform', `translate(0,${height})`)
-                .call(d3.axisBottom(xScale).tickSize(-height).tickFormat(''))
-                .style('stroke-opacity', 0.1);
-
-            svg.append('g')
-                .attr('class', 'grid')
-                .call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''))
-                .style('stroke-opacity', 0.1);
-
-            // X axis
-            svg.append('g')
-                .attr('transform', `translate(0,${height})`)
-                .call(d3.axisBottom(xScale).ticks(10))
-                .style('font-size', '12px')
-                .append('text')
-                .attr('x', width / 2)
-                .attr('y', 45)
-                .attr('fill', '#2d3748')
-                .attr('class', 'axis-label')
-                .text('Sleep Duration (hours)');
-
-            // Y axis
-            svg.append('g')
-                .call(d3.axisLeft(yScale).ticks(10))
-                .style('font-size', '12px')
-                .append('text')
-                .attr('transform', 'rotate(-90)')
-                .attr('x', -height / 2)
-                .attr('y', -55)
-                .attr('fill', '#2d3748')
-                .attr('class', 'axis-label')
-                .text('Physical Activity Level');
-
-            // Color legend
-            const legendWidth = 200;
-            const legendHeight = 15;
-
-            const legendSvg = svg.append('g')
-                .attr('transform', `translate(${width - legendWidth - 10}, -30)`);
-
-            const legendGradient = legendSvg.append('defs')
-                .append('linearGradient')
-                .attr('id', 'legend-gradient')
-                .attr('x1', '0%')
-                .attr('x2', '100%');
-
-            legendGradient.selectAll('stop')
-                .data(d3.range(0, 1.01, 0.1))
-                .join('stop')
-                .attr('offset', d => `${d * 100}%`)
-                .attr('stop-color', d => colorScale(d * maxCount));
-
-            legendSvg.append('rect')
-                .attr('width', legendWidth)
-                .attr('height', legendHeight)
-                .style('fill', 'url(#legend-gradient)')
-                .style('stroke', '#cbd5e0')
-                .style('stroke-width', 1);
-
-            legendSvg.append('text')
-                .attr('x', 0)
-                .attr('y', -5)
-                .style('font-size', '12px')
-                .style('font-weight', '600')
-                .text('Student Density');
-
-            legendSvg.append('text')
-                .attr('x', 0)
-                .attr('y', legendHeight + 15)
-                .style('font-size', '11px')
-                .text('Low');
-
-            legendSvg.append('text')
-                .attr('x', legendWidth)
-                .attr('y', legendHeight + 15)
-                .attr('text-anchor', 'end')
-                .style('font-size', '11px')
-                .text(`High (${maxCount})`);
-        }
-
-        function createRadarCharts() {
-            const container = document.getElementById('radar-viz');
-            container.innerHTML = '';
-
-            const width = 500;
-            const height = 500;
-            const margin = 80;
-
-            // Calculate averages for both groups
-            const depressed = studentData.filter(d => d.depression);
-            const notDepressed = studentData.filter(d => !d.depression);
-
-            const features = [
-                { key: 'sleep', label: 'Sleep', max: 12 },
-                { key: 'study', label: 'Study Hours', max: 12 },
-                { key: 'socialMedia', label: 'Social Media', max: 12 },
-                { key: 'physicalActivity', label: 'Physical Activity', max: 200 },
-                { key: 'stress', label: 'Stress Level', max: 10 },
-                { key: 'cgpa', label: 'CGPA', max: 4 }
-            ];
-
-            const dataDepressed = features.map(f => ({
-                axis: f.label,
-                value: d3.mean(depressed, d => d[f.key]) / f.max
-            }));
-
-            const dataNotDepressed = features.map(f => ({
-                axis: f.label,
-                value: d3.mean(notDepressed, d => d[f.key]) / f.max
-            }));
-
-            const datasets = [
-                { name: 'With Depression', data: dataDepressed, color: '#ef4444' },
-                { name: 'Without Depression', data: dataNotDepressed, color: '#10b981' }
-            ];
-
-            // Create two radar charts side by side
-            datasets.forEach((dataset, idx) => {
-                const svg = d3.select(container)
-                    .append('svg')
-                    .attr('width', width)
-                    .attr('height', height)
-                    .style('display', 'inline-block')
-                    .append('g')
-                    .attr('transform', `translate(${width/2},${height/2})`);
-
-                const radius = Math.min(width, height) / 2 - margin;
-                const angleSlice = (Math.PI * 2) / features.length;
-
-                // Circular grid
-                const levels = 5;
-                for (let i = 1; i <= levels; i++) {
-                    svg.append('circle')
-                        .attr('r', radius * i / levels)
-                        .style('fill', 'none')
-                        .style('stroke', '#cbd5e0')
-                        .style('stroke-width', 1);
-
-                    if (i === levels) {
-                        svg.append('text')
-                            .attr('x', 5)
-                            .attr('y', -radius * i / levels)
-                            .style('font-size', '10px')
-                            .style('fill', '#718096')
-                            .text('100%');
-                    }
-                }
-
-                // Axes
-                const axes = svg.append('g');
-                features.forEach((f, i) => {
-                    const angle = angleSlice * i - Math.PI / 2;
-                    const x = Math.cos(angle) * radius;
-                    const y = Math.sin(angle) * radius;
-
-                    axes.append('line')
-                        .attr('x1', 0)
-                        .attr('y1', 0)
-                        .attr('x2', x)
-                        .attr('y2', y)
-                        .style('stroke', '#cbd5e0')
-                        .style('stroke-width', 1);
-
-                    axes.append('text')
-                        .attr('x', Math.cos(angle) * (radius + 20))
-                        .attr('y', Math.sin(angle) * (radius + 20))
-                        .attr('text-anchor', 'middle')
-                        .attr('dy', '0.35em')
-                        .style('font-size', '12px')
-                        .style('font-weight', '600')
-                        .style('fill', '#2d3748')
-                        .text(f.label);
-                });
-
-                // Data area
-                const radarLine = d3.lineRadial()
-                    .angle((d, i) => angleSlice * i)
-                    .radius(d => radius * d.value)
-                    .curve(d3.curveLinearClosed);
-
-                svg.append('path')
-                    .datum(dataset.data)
-                    .attr('d', radarLine)
-                    .style('fill', dataset.color)
-                    .style('fill-opacity', 0.3)
-                    .style('stroke', dataset.color)
-                    .style('stroke-width', 3);
-
-                // Data points
-                dataset.data.forEach((d, i) => {
-                    const angle = angleSlice * i - Math.PI / 2;
-                    const x = Math.cos(angle) * radius * d.value;
-                    const y = Math.sin(angle) * radius * d.value;
-
-                    svg.append('circle')
-                        .attr('cx', x)
-                        .attr('cy', y)
-                        .attr('r', 5)
-                        .style('fill', dataset.color)
-                        .style('stroke', '#fff')
-                        .style('stroke-width', 2);
-                });
-
-                // Title
-                svg.append('text')
-                    .attr('y', -radius - 40)
-                    .attr('text-anchor', 'middle')
-                    .style('font-size', '16px')
-                    .style('font-weight', '700')
-                    .style('fill', dataset.color)
-                    .text(dataset.name);
-            });
-        }
-
-        function createBubbleMatrix() {
-            const container = document.getElementById('bubble-matrix');
-            container.innerHTML = '';
-
-            const margin = {top: 40, right: 150, bottom: 60, left: 80};
-            const width = 1000 - margin.left - margin.right;
-            const height = 600 - margin.top - margin.bottom;
-
-            const svg = d3.select(container)
-                .append('svg')
-                .attr('width', width + margin.left + margin.right)
-                .attr('height', height + margin.top + margin.bottom)
-                .append('g')
-                .attr('transform', `translate(${margin.left},${margin.top})`);
-
-            // Filter by department
-            const dept = document.getElementById('deptFilter2').value;
-            const filtered = dept === 'all' ? studentData : studentData.filter(d => d.department === dept);
-
-            // Group by stress and sleep (rounded)
-            const grouped = d3.rollup(
-                filtered,
-                v => ({
-                    count: v.length,
-                    avgCGPA: d3.mean(v, d => d.cgpa),
-                    avgSocialMedia: d3.mean(v, d => d.socialMedia),
-                    avgPhysicalActivity: d3.mean(v, d => d.physicalActivity),
-                    depressionRate: v.filter(d => d.depression).length / v.length
-                }),
-                d => Math.round(d.stress),
-                d => Math.round(d.sleep)
-            );
-
-            const bubbleData = [];
-            grouped.forEach((sleepMap, stress) => {
-                sleepMap.forEach((data, sleep) => {
-                    bubbleData.push({ stress, sleep, ...data });
-                });
-            });
-
-            // Scales
-            const xScale = d3.scaleLinear()
-                .domain([0, 10])
-                .range([0, width]);
-
-            const yScale = d3.scaleLinear()
-                .domain([0, 12])
-                .range([height, 0]);
-
-            const sizeScale = d3.scaleSqrt()
-                .domain([0, d3.max(bubbleData, d => d.count)])
-                .range([5, 50]);
-
-            // Grid
-            svg.append('g')
-                .attr('class', 'grid')
-                .attr('transform', `translate(0,${height})`)
-                .call(d3.axisBottom(xScale).tickSize(-height).tickFormat(''));
-
-            svg.append('g')
-                .attr('class', 'grid')
-                .call(d3.axisLeft(yScale).tickSize(-width).tickFormat(''));
-
-            // Bubbles
-            svg.selectAll('circle')
-                .data(bubbleData)
-                .join('circle')
-                .attr('cx', d => xScale(d.stress))
-                .attr('cy', d => yScale(d.sleep))
-                .attr('r', d => sizeScale(d.count))
-                .attr('fill', d => cgpaColorScale(d.avgCGPA))
-                .attr('stroke', d => d.depressionRate > 0.5 ? '#ef4444' : '#10b981')
-                .attr('stroke-width', d => d.depressionRate > 0.5 ? 3 : 1)
-                .attr('opacity', 0.7)
-                .on('mouseover', function(event, d) {
-                    d3.select(this)
-                        .attr('opacity', 1)
-                        .attr('stroke-width', 4);
-                    
-                    tooltip.style('opacity', 1)
-                        .html(`
-                            <strong>${d.count} students</strong><br>
-                            Stress Level: ${d.stress}/10<br>
-                            Sleep: ${d.sleep} hrs<br>
-                            Avg CGPA: ${d.avgCGPA.toFixed(2)}<br>
-                            Avg Social Media: ${d.avgSocialMedia.toFixed(1)} hrs<br>
-                            Avg Physical Activity: ${d.avgPhysicalActivity.toFixed(0)}<br>
-                            Depression Rate: ${(d.depressionRate * 100).toFixed(1)}%
-                        `)
-                        .style('left', (event.pageX + 10) + 'px')
-                        .style('top', (event.pageY - 10) + 'px');
-                })
-                .on('mouseout', function(d) {
-                    d3.select(this)
-                        .attr('opacity', 0.7)
-                        .attr('stroke-width', d => d.depressionRate > 0.5 ? 3 : 1);
-                    tooltip.style('opacity', 0);
-                });
-
-            // X axis
-            svg.append('g')
-                .attr('transform', `translate(0,${height})`)
-                .call(d3.axisBottom(xScale))
-                .append('text')
-                .attr('x', width / 2)
-                .attr('y', 40)
-                .attr('fill', '#2d3748')
-                .attr('class', 'axis-label')
-                .text('Stress Level');
-
-            // Y axis
-            svg.append('g')
-                .call(d3.axisLeft(yScale))
-                .append('text')
-                .attr('transform', 'rotate(-90)')
-                .attr('x', -height / 2)
-                .attr('y', -50)
-                .attr('fill', '#2d3748')
-                .attr('class', 'axis-label')
-                .text('Sleep Duration (hours)');
-
-            // CGPA Color Legend
-            const legendWidth = 20;
-            const legendHeight = 200;
-            const legendSvg = svg.append('g')
-                .attr('transform', `translate(${width + 30}, ${height/2 - legendHeight/2})`);
-
-            const legendGradient = legendSvg.append('defs')
-                .append('linearGradient')
-                .attr('id', 'cgpa-gradient')
-                .attr('x1', '0%')
-                .attr('y1', '100%')
-                .attr('x2', '0%')
-                .attr('y2', '0%');
-
-            legendGradient.selectAll('stop')
-                .data(d3.range(0, 1.01, 0.1))
-                .join('stop')
-                .attr('offset', d => `${d * 100}%`)
-                .attr('stop-color', d => cgpaColorScale(d * 4));
-
-            legendSvg.append('rect')
-                .attr('width', legendWidth)
-                .attr('height', legendHeight)
-                .style('fill', 'url(#cgpa-gradient)');
-
-            legendSvg.append('text')
-                .attr('x', legendWidth + 5)
-                .attr('y', 0)
-                .style('font-size', '12px')
-                .style('font-weight', '600')
-                .text('CGPA');
-
-            legendSvg.append('text')
-                .attr('x', legendWidth + 5)
-                .attr('y', legendHeight)
-                .style('font-size', '11px')
-                .text('0.0');
-
-            legendSvg.append('text')
-                .attr('x', legendWidth + 5)
-                .attr('y', 12)
-                .style('font-size', '11px')
-                .text('4.0');
-
-            // Size legend
-            const sizeLegend = svg.append('g')
-                .attr('transform', `translate(${width + 30}, ${height - 100})`);
-
-            sizeLegend.append('text')
-                .attr('y', -10)
-                .style('font-size', '12px')
-                .style('font-weight', '600')
-                .text('Students');
-
-            [10, 50, 100].forEach((count, i) => {
-                sizeLegend.append('circle')
-                    .attr('cx', 10)
-                    .attr('cy', i * 30 + 10)
-                    .attr('r', sizeScale(count))
-                    .attr('fill', 'none')
-                    .attr('stroke', '#2d3748')
-                    .attr('stroke-width', 1);
-
-                sizeLegend.append('text')
-                    .attr('x', 30)
-                    .attr('y', i * 30 + 14)
-                    .style('font-size', '11px')
-                    .text(count);
-            });
-        }
-    </script>
+
+    <div class="chart-card full-width">
+      <div class="chart-num">02 / COMBINATION RISK MATRIX</div>
+      <div class="chart-title">Which combination of factors is most dangerous?</div>
+      <div class="chart-sub">Depression rate (%) per cell. Each panel = one Study Level bin. Click a cell to filter all charts.</div>
+      <div class="panel-toggle" id="heatPanelToggle">
+        <span style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-right:4px;line-height:2">STUDY LEVEL:</span>
+      </div>
+      <div id="chart2" class="chart-svg-wrap"></div>
+      <div class="insight-box" id="insight2"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-num">04 / CORRELATION MATRIX</div>
+      <div class="chart-title">Which variables connect most to depression?</div>
+      <div class="chart-sub">Pearson r. Click any cell to see a scatter overlay. Depression row is highlighted.</div>
+      <div id="chart4" class="chart-svg-wrap"></div>
+      <div id="scatterOverlay" style="display:none;margin-top:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)" id="scatterTitle"></span>
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);cursor:pointer" onclick="hideScatter()">✕ close</span>
+        </div>
+        <div id="scatterMini"></div>
+      </div>
+      <div class="insight-box" id="insight4"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-num">05 / SCATTER EXPLORER</div>
+      <div class="chart-title">Explore any two variables</div>
+      <div class="chart-sub">500 subsampled students. Trend lines and marginal histograms split by depression status.</div>
+      <div class="scatter-controls">
+        <label>X:</label>
+        <select class="ctrl-select" id="scatterX" onchange="updateScatter()"></select>
+        <label>Y:</label>
+        <select class="ctrl-select" id="scatterY" onchange="updateScatter()"></select>
+        <button class="ctrl-btn active" id="regBtn" onclick="toggleScatterOption('reg')">Trend Lines</button>
+        <button class="ctrl-btn active" id="margBtn" onclick="toggleScatterOption('marg')">Marginals</button>
+        <div id="corrBadge"></div>
+      </div>
+      <div id="chart5" class="chart-svg-wrap"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+let allData = [];
+let filteredData = [];
+
+// ── Helper: get usable inner width of a chart container ──────────────
+function getContainerWidth(el) {
+  // Walk up to .chart-card and subtract its padding (32px each side)
+  let node = el;
+  while (node && !node.classList.contains('chart-card')) node = node.parentElement;
+  if (!node) return el.offsetWidth || 600;
+  const style = getComputedStyle(node);
+  const pl = parseFloat(style.paddingLeft) || 32;
+  const pr = parseFloat(style.paddingRight) || 32;
+  return Math.max(100, node.offsetWidth - pl - pr);
+}
+
+// ── Load CSV ─────────────────────────────────────────────────────────
+document.getElementById('loadingMsg').textContent = 'LOADING students_updated.csv…';
+
+d3.csv('students_updated.csv').then(data => {
+  document.getElementById('loadingMsg').textContent = 'PROCESSING ' + data.length + ' ROWS…';
+
+  allData = data.map(row => ({
+    dept:             row.Department,
+    cgpa:             +row.CGPA,
+    sleep:            +row.Sleep_Duration,
+    study:            +row.Study_Hours,
+    socialMedia:      +row.Social_Media_Hours,
+    physicalActivity: +row.Physical_Activity,
+    stress:           +row.Stress_Level,
+    depression:       row.Depression === 'True'
+  })).filter(d => !isNaN(d.cgpa) && !isNaN(d.sleep));
+
+  filteredData = allData;
+  document.getElementById('loadingMsg').textContent = 'RENDERING VISUALIZATIONS…';
+
+  // FIX: Use requestAnimationFrame after a longer delay to ensure layout is complete
+  setTimeout(() => {
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    // Two rAF passes ensure DOM is painted and has real dimensions
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      initScatterSelects();
+      renderAll();
+    }));
+  }, 200);
+}).catch(error => {
+  document.getElementById('loadingMsg').style.display = 'none';
+  document.getElementById('loadingError').style.display = 'block';
+  document.getElementById('loadingError').textContent =
+    'ERROR: Could not load students_updated.csv. Make sure the file is in the same folder as this HTML file.\n\n' + error.message;
+  console.error('CSV load error:', error);
+});
+
+// ── Filter state ─────────────────────────────────────────────────────
+const globalFilter = { sleepBin: null, stressBin: null, studyBin: null };
+
+function sleepBin(v)    { return v < 5 ? 'Low (<5h)' : v <= 7 ? 'Normal (5–7h)' : 'High (>7h)'; }
+function stressBinFn(v) { return v <= 3 ? 'Low (1–3)' : v <= 6 ? 'Medium (4–6)' : 'High (7–10)'; }
+function studyBin(v)    { return v < 2 ? 'Low (<2h)' : v <= 5 ? 'Normal (2–5h)' : 'High (>5h)'; }
+
+const SLEEP_BINS  = ['Low (<5h)', 'Normal (5–7h)', 'High (>7h)'];
+const STRESS_BINS = ['Low (1–3)', 'Medium (4–6)', 'High (7–10)'];
+const STUDY_BINS  = ['Low (<2h)', 'Normal (2–5h)', 'High (>5h)'];
+
+function applyFilters() {
+  filteredData = allData.filter(d => {
+    if (globalFilter.sleepBin  !== null && sleepBin(d.sleep)     !== globalFilter.sleepBin)  return false;
+    if (globalFilter.stressBin !== null && stressBinFn(d.stress) !== globalFilter.stressBin) return false;
+    if (globalFilter.studyBin  !== null && studyBin(d.study)     !== globalFilter.studyBin)  return false;
+    return true;
+  });
+}
+
+function setFilter(key, val) {
+  globalFilter[key] = (globalFilter[key] === val) ? null : val;
+  applyFilters(); updateFilterBar(); renderAll();
+}
+function clearAllFilters() {
+  Object.keys(globalFilter).forEach(k => globalFilter[k] = null);
+  filteredData = allData; updateFilterBar(); renderAll();
+}
+function updateFilterBar() {
+  const bar = document.getElementById('filterBar');
+  const badges = document.getElementById('filterBadges');
+  const active = [];
+  if (globalFilter.sleepBin)  active.push({key:'sleepBin',  label:'Sleep: '  + globalFilter.sleepBin});
+  if (globalFilter.stressBin) active.push({key:'stressBin', label:'Stress: ' + globalFilter.stressBin});
+  if (globalFilter.studyBin)  active.push({key:'studyBin',  label:'Study: '  + globalFilter.studyBin});
+  if (!active.length) { bar.classList.remove('active'); return; }
+  bar.classList.add('active');
+  badges.innerHTML = active.map(a =>
+    `<span class="filter-badge" onclick="setFilter('${a.key}','${globalFilter[a.key]}')">${a.label} <span class="x">✕</span></span>`
+  ).join('');
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────
+const tt = document.getElementById('tooltip');
+function showTip(html, e) { tt.innerHTML = html; tt.style.display = 'block'; moveTip(e); }
+function moveTip(e) {
+  let x = e.clientX + 16, y = e.clientY - 8;
+  if (x + 280 > window.innerWidth) x = e.clientX - 280;
+  tt.style.left = x + 'px'; tt.style.top = y + 'px';
+}
+function hideTip() { tt.style.display = 'none'; }
+
+// ── Header stats ──────────────────────────────────────────────────────
+function renderHeaderStats() {
+  const dep  = filteredData.filter(d => d.depression).length;
+  const tot  = filteredData.length;
+  const rate = (dep / tot * 100).toFixed(1);
+  const avgStress = d3.mean(filteredData, d => d.stress).toFixed(1);
+  const avgSleep  = d3.mean(filteredData, d => d.sleep).toFixed(1);
+  const avgCGPA   = d3.mean(filteredData, d => d.cgpa).toFixed(2);
+  document.getElementById('headerStats').innerHTML = `
+    <div class="hstat"><div class="hstat-val">${tot.toLocaleString()}</div><div class="hstat-label">Students</div></div>
+    <div class="hstat"><div class="hstat-val" style="color:var(--dep)">${dep.toLocaleString()}</div><div class="hstat-label"><span class="dep-dot"></span>Depressed (${rate}%)</div></div>
+    <div class="hstat"><div class="hstat-val" style="color:var(--nodep)">${(tot - dep).toLocaleString()}</div><div class="hstat-label"><span class="nodep-dot"></span>Not Depressed</div></div>
+    <div class="hstat"><div class="hstat-val">${avgStress}</div><div class="hstat-label">Avg Stress</div></div>
+    <div class="hstat"><div class="hstat-val">${avgSleep}h</div><div class="hstat-label">Avg Sleep</div></div>
+    <div class="hstat"><div class="hstat-val">${avgCGPA}</div><div class="hstat-label">Avg CGPA</div></div>
+  `;
+}
+
+// ── Chart 1: Diverging bar ────────────────────────────────────────────
+let divMode = 'pct';
+function setDivMode(m) {
+  divMode = m;
+  document.getElementById('pctBtn').classList.toggle('active', m === 'pct');
+  document.getElementById('absBtn').classList.toggle('active', m === 'abs');
+  renderChart1();
+}
+
+function renderChart1() {
+  const el = document.getElementById('chart1');
+  el.innerHTML = '';
+  const dep   = filteredData.filter(d => d.depression);
+  const nodep = filteredData.filter(d => !d.depression);
+  if (dep.length < 5 || nodep.length < 5) {
+    el.innerHTML = '<div class="loading-placeholder">Not enough data</div>'; return;
+  }
+
+  const factors = [
+    { key:'sleep',            label:'Sleep Duration',    unit:'h' },
+    { key:'study',            label:'Study Hours',       unit:'h' },
+    { key:'physicalActivity', label:'Physical Activity', unit:''  },
+    { key:'cgpa',             label:'CGPA',              unit:''  },
+    { key:'stress',           label:'Stress Level',      unit:''  },
+    { key:'socialMedia',      label:'Social Media',      unit:'h' },
+  ];
+
+  const computed = factors.map(f => {
+    const dAvg = d3.mean(dep,   d => d[f.key]);
+    const nAvg = d3.mean(nodep, d => d[f.key]);
+    return { ...f, dAvg, nAvg,
+      pct: (dAvg - nAvg) / Math.abs(nAvg) * 100,
+      abs: dAvg - nAvg };
+  }).sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+
+  // FIX: use getContainerWidth instead of parentElement.clientWidth - 64
+  const W = getContainerWidth(el);
+  const margin = { top:10, right:90, bottom:28, left:130 };
+  const innerW = Math.max(50, W - margin.left - margin.right);
+  const H = factors.length * 46 + margin.top + margin.bottom;
+
+  const svg = d3.select(el).append('svg')
+    .attr('width', W).attr('height', H)
+    .append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const maxV = d3.max(computed.map(d => Math.abs(divMode === 'pct' ? d.pct : d.abs))) * 1.2 || 1;
+  const x = d3.scaleLinear().domain([-maxV, maxV]).range([0, innerW]);
+  const y = d3.scaleBand().domain(computed.map(d => d.label)).range([0, H - margin.top - margin.bottom]).padding(0.3);
+
+  // grid
+  svg.append('g').attr('class','grid')
+    .call(d3.axisBottom(x).ticks(5).tickSize(H - margin.top - margin.bottom).tickFormat(''))
+    .call(g => g.select('.domain').remove());
+
+  // centre line
+  svg.append('line')
+    .attr('x1', x(0)).attr('x2', x(0))
+    .attr('y1', 0).attr('y2', H - margin.top - margin.bottom)
+    .attr('stroke', 'rgba(255,255,255,0.25)').attr('stroke-width', 1.5);
+
+  // y axis labels
+  svg.append('g').call(d3.axisLeft(y).tickSize(0))
+    .call(g => g.select('.domain').remove())
+    .selectAll('text')
+      .attr('fill', '#94a3b8').attr('font-size', '12px').attr('font-family', 'var(--font-body)');
+
+  // bars
+  const barG = svg.selectAll('.bar-g').data(computed).enter().append('g').attr('class','bar-g');
+  barG.append('rect')
+    .attr('x', d => { const v = divMode==='pct'?d.pct:d.abs; return v >= 0 ? x(0) : x(v); })
+    .attr('y', d => y(d.label))
+    .attr('width',  d => { const v = divMode==='pct'?d.pct:d.abs; return Math.max(2, Math.abs(x(v) - x(0))); })
+    .attr('height', y.bandwidth())
+    .attr('fill', d => (divMode==='pct'?d.pct:d.abs) > 0 ? 'var(--dep)' : 'var(--nodep)')
+    .attr('rx', 2).style('cursor', 'pointer')
+    .on('mouseover', (e, d) => {
+      const sign = (divMode==='pct'?d.pct:d.abs) > 0 ? 'MORE' : 'LESS';
+      showTip(`<strong>${d.label}</strong><br>
+        <span class="t-dep">Depressed avg: ${d.dAvg.toFixed(2)}${d.unit}</span><br>
+        <span class="t-nodep">Non-depr avg:  ${d.nAvg.toFixed(2)}${d.unit}</span><br>
+        Δ = ${d.pct > 0 ? '+' : ''}${d.pct.toFixed(1)}% — Depressed have ${sign} ${d.label.toLowerCase()}`, e);
+    })
+    .on('mousemove', moveTip).on('mouseout', hideTip);
+
+  // value labels
+  barG.append('text')
+    .attr('x', d => { const v = divMode==='pct'?d.pct:d.abs; return v >= 0 ? x(v)+5 : x(v)-5; })
+    .attr('y', d => y(d.label) + y.bandwidth()/2 + 4)
+    .attr('text-anchor', d => (divMode==='pct'?d.pct:d.abs) >= 0 ? 'start' : 'end')
+    .attr('fill', '#e2e8f0').attr('font-size', '11px').attr('font-family', 'var(--font-mono)')
+    .text(d => divMode==='pct'
+      ? (d.pct > 0 ? '+' : '') + d.pct.toFixed(1) + '%'
+      : (d.abs > 0 ? '+' : '') + d.abs.toFixed(2));
+
+  // x-axis
+  svg.append('g').attr('transform', `translate(0,${H - margin.top - margin.bottom})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d => divMode==='pct' ? d.toFixed(0)+'%' : d.toFixed(1)))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','var(--muted)').attr('font-size','10px'); });
+
+  const top = computed[0];
+  document.getElementById('insight1').innerHTML =
+    `<strong>Key Insight:</strong> The strongest differentiator is <strong>${top.label}</strong> — depressed students show ${Math.abs(top.pct).toFixed(1)}% ${top.pct > 0 ? 'more' : 'less'} than non-depressed peers (${top.dAvg.toFixed(2)} vs ${top.nAvg.toFixed(2)}${top.unit}).`;
+}
+
+// ── Chart 2: Heat matrix ──────────────────────────────────────────────
+let activeStudyPanel = 'Normal (2–5h)';
+
+function renderChart2() {
+  const el = document.getElementById('chart2');
+  el.innerHTML = '';
+  const toggle = document.getElementById('heatPanelToggle');
+
+  if (toggle.querySelectorAll('.ptbtn').length === 0) {
+    STUDY_BINS.forEach(sb => {
+      const btn = document.createElement('button');
+      btn.className = 'ptbtn' + (sb === activeStudyPanel ? ' active' : '');
+      btn.textContent = sb;
+      btn.onclick = () => {
+        activeStudyPanel = sb;
+        toggle.querySelectorAll('.ptbtn').forEach(b => b.classList.toggle('active', b.textContent === sb));
+        renderChart2();
+      };
+      toggle.appendChild(btn);
+    });
+  } else {
+    toggle.querySelectorAll('.ptbtn').forEach(b => b.classList.toggle('active', b.textContent === activeStudyPanel));
+  }
+
+  const panel = filteredData.filter(d => studyBin(d.study) === activeStudyPanel);
+  const W    = getContainerWidth(el);
+  const CELL = Math.min(110, Math.floor((W - 120) / 3));
+  const margin = { top:48, right:24, bottom:54, left:120 };
+  const svgW = CELL*3 + margin.left + margin.right;
+  const svgH = CELL*3 + margin.top + margin.bottom;
+
+  const svg = d3.select(el).append('svg').attr('width', svgW).attr('height', svgH)
+    .append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const cells = [];
+  SLEEP_BINS.forEach(sb => {
+    STRESS_BINS.forEach(str => {
+      const cell = panel.filter(d => sleepBin(d.sleep) === sb && stressBinFn(d.stress) === str);
+      const n = cell.length, dep = cell.filter(d => d.depression).length;
+      cells.push({ sb, str, n, dep, rate: n > 0 ? dep/n*100 : 0,
+        avgCGPA:   n > 0 ? d3.mean(cell, d => d.cgpa).toFixed(2)        : 'N/A',
+        avgSocial: n > 0 ? d3.mean(cell, d => d.socialMedia).toFixed(1) : 'N/A' });
+    });
+  });
+
+  const colorScale = d3.scaleSequential().domain([0, 100])
+    .interpolator(t => d3.interpolateRgb('#0f2027', '#ef4444')(t));
+  const xScale = d3.scaleBand().domain(STRESS_BINS).range([0, CELL*3]).padding(0.05);
+  const yScale = d3.scaleBand().domain(SLEEP_BINS).range([0, CELL*3]).padding(0.05);
+
+  svg.append('text').attr('x', CELL*1.5).attr('y', -20).attr('text-anchor','middle')
+    .attr('fill','var(--muted)').attr('font-size','11px').attr('font-family','var(--font-mono)').attr('letter-spacing','0.1em')
+    .text('← STRESS LEVEL →');
+  svg.append('text').attr('transform','rotate(-90)').attr('x', -CELL*1.5).attr('y', -88)
+    .attr('text-anchor','middle').attr('fill','var(--muted)').attr('font-size','11px').attr('font-family','var(--font-mono)').attr('letter-spacing','0.1em')
+    .text('← SLEEP DURATION →');
+
+  svg.append('g').call(d3.axisTop(xScale).tickSize(0))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','#94a3b8').attr('font-size','10px'); });
+  svg.append('g').call(d3.axisLeft(yScale).tickSize(0))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','#94a3b8').attr('font-size','10px'); });
+
+  const cellG = svg.selectAll('.cell').data(cells).enter().append('g').attr('class','cell');
+  cellG.append('rect')
+    .attr('x', d => xScale(d.str)).attr('y', d => yScale(d.sb))
+    .attr('width', xScale.bandwidth()).attr('height', yScale.bandwidth())
+    .attr('fill', d => colorScale(d.rate)).attr('rx', 4)
+    .attr('stroke', d => (globalFilter.sleepBin===d.sb && globalFilter.stressBin===d.str) ? '#fff' : 'transparent')
+    .attr('stroke-width', 2).style('cursor','pointer')
+    .on('mouseover', (e, d) => showTip(
+      `<strong>${d.sb} Sleep + ${d.str} Stress</strong><br>
+       Study: ${activeStudyPanel}<br>
+       <span class="t-dep">${d.rate.toFixed(1)}% depressed</span> (${d.dep}/${d.n} students)<br>
+       Avg CGPA: ${d.avgCGPA} | Avg Social: ${d.avgSocial}h`, e))
+    .on('mousemove', moveTip).on('mouseout', hideTip)
+    .on('click', (e, d) => {
+      globalFilter.sleepBin  = globalFilter.sleepBin  === d.sb             ? null : d.sb;
+      globalFilter.stressBin = globalFilter.stressBin === d.str            ? null : d.str;
+      globalFilter.studyBin  = globalFilter.studyBin  === activeStudyPanel ? null : activeStudyPanel;
+      applyFilters(); updateFilterBar(); renderAll();
+    });
+
+  cellG.append('text')
+    .attr('x', d => xScale(d.str) + xScale.bandwidth()/2)
+    .attr('y', d => yScale(d.sb)  + yScale.bandwidth()/2 - 6)
+    .attr('text-anchor','middle').attr('dominant-baseline','middle')
+    .attr('fill', d => d.rate > 50 ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)')
+    .attr('font-size', Math.max(14, Math.min(20, CELL*0.22)) + 'px')
+    .attr('font-family','var(--font-mono)').attr('font-weight','700')
+    .text(d => d.rate.toFixed(0) + '%');
+
+  cellG.append('text')
+    .attr('x', d => xScale(d.str) + xScale.bandwidth()/2)
+    .attr('y', d => yScale(d.sb)  + yScale.bandwidth()/2 + 14)
+    .attr('text-anchor','middle')
+    .attr('fill','rgba(255,255,255,0.4)').attr('font-size','9px').attr('font-family','var(--font-mono)')
+    .text(d => `n=${d.n}`);
+
+  const a = cells.find(c => c.sb==='Low (<5h)'  && c.str==='High (7–10)');
+  const b = cells.find(c => c.sb==='High (>7h)' && c.str==='Low (1–3)');
+  document.getElementById('insight2').innerHTML =
+    `<strong>Key Insight:</strong> In the <em>${activeStudyPanel}</em> study group — Low Sleep + High Stress = <strong style="color:var(--dep)">${a?.rate.toFixed(1)}% depressed</strong> vs High Sleep + Low Stress = <strong style="color:var(--nodep)">${b?.rate.toFixed(1)}% depressed</strong>.`;
+}
+
+
+// ── Chart 4: Correlation matrix ───────────────────────────────────────
+function hideScatter() { document.getElementById('scatterOverlay').style.display = 'none'; }
+
+function pearson(a, b) {
+  const ma = d3.mean(a), mb = d3.mean(b);
+  const num = d3.sum(a.map((v, i) => (v-ma)*(b[i]-mb)));
+  const den = Math.sqrt(d3.sum(a.map(v => (v-ma)**2)) * d3.sum(b.map(v => (v-mb)**2)));
+  return den === 0 ? 0 : num/den;
+}
+
+function renderChart4() {
+  const el = document.getElementById('chart4');
+  el.innerHTML = '';
+
+  const vars = [
+    {key:'cgpa',           label:'CGPA'      },
+    {key:'study',          label:'Study'     },
+    {key:'sleep',          label:'Sleep'     },
+    {key:'physicalActivity',label:'Activity' },
+    {key:'socialMedia',    label:'Social'    },
+    {key:'stress',         label:'Stress'    },
+    {key:'depressionNum',  label:'Depression'},
+  ];
+
+  // subsample for performance
+  const sample = filteredData.length > 10000
+    ? filteredData.filter((_, i) => i % Math.ceil(filteredData.length/10000) === 0)
+    : filteredData;
+  const data   = sample.map(d => ({ ...d, depressionNum: d.depression ? 1 : 0 }));
+  const matrix = vars.map(v => vars.map(w => pearson(data.map(d => d[v.key]), data.map(d => d[w.key]))));
+
+  const W    = getContainerWidth(el);
+  const CELL = Math.min(56, Math.max(32, Math.floor((W - 80) / 7)));
+  const margin = { top:66, right:12, bottom:12, left:70 };
+  const svgW = CELL*7 + margin.left + margin.right;
+  const svgH = CELL*7 + margin.top  + margin.bottom;
+
+  const svg = d3.select(el).append('svg').attr('width', svgW).attr('height', svgH)
+    .append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const colorScale = d3.scaleDiverging(d3.interpolateRdBu).domain([1, 0, -1]);
+
+  vars.forEach((v, i) => {
+    svg.append('text').attr('x', i*CELL + CELL/2).attr('y', -10)
+      .attr('text-anchor','middle')
+      .attr('transform', `rotate(-40,${i*CELL + CELL/2},-10)`)
+      .attr('fill', v.label==='Depression' ? '#ef4444' : '#94a3b8')
+      .attr('font-size','10px').attr('font-weight', v.label==='Depression'?'700':'400')
+      .text(v.label);
+    svg.append('text').attr('x', -10).attr('y', i*CELL + CELL/2)
+      .attr('text-anchor','end').attr('dominant-baseline','middle')
+      .attr('fill', v.label==='Depression' ? '#ef4444' : '#94a3b8')
+      .attr('font-size','10px').attr('font-weight', v.label==='Depression'?'700':'400')
+      .text(v.label);
+  });
+
+  vars.forEach((v, i) => vars.forEach((w, j) => {
+    const r = matrix[i][j];
+    const isDep = v.label==='Depression' || w.label==='Depression';
+    const g = svg.append('g').style('cursor','pointer');
+    g.append('rect')
+      .attr('x', j*CELL+1).attr('y', i*CELL+1)
+      .attr('width', CELL-2).attr('height', CELL-2)
+      .attr('fill', colorScale(r)).attr('rx', 2)
+      .attr('stroke', isDep ? 'rgba(239,68,68,0.4)' : 'transparent')
+      .attr('stroke-width', isDep ? 1 : 0)
+      .on('mouseover', e => {
+        const interp = r>0.5?'strong positive':r<-0.5?'strong negative':r>0.2?'moderate positive':r<-0.2?'moderate negative':'weak';
+        showTip(`<strong>${v.label} × ${w.label}</strong><br>r = ${r.toFixed(3)}<br><em>${interp} correlation</em>`, e);
+      })
+      .on('mousemove', moveTip).on('mouseout', hideTip)
+      .on('click', () => { if (i !== j) showMiniScatter(v, w, r); });
+
+    if (CELL >= 36) {
+      g.append('text')
+        .attr('x', j*CELL + CELL/2).attr('y', i*CELL + CELL/2)
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill', Math.abs(r) > 0.4 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)')
+        .attr('font-size','9px').attr('font-family','var(--font-mono)')
+        .text(r.toFixed(2));
+    }
+  }));
+
+  const depRow = matrix[6];
+  const strongest = vars.map((v, i) => ({label:v.label, r:depRow[i]}))
+    .filter(x => x.label !== 'Depression')
+    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))[0];
+  document.getElementById('insight4').innerHTML =
+    `<strong>Key Insight:</strong> <strong>${strongest.label}</strong> has the strongest correlation with depression (r = ${strongest.r.toFixed(3)}). Click any cell to see the scatter relationship.`;
+}
+
+function showMiniScatter(varA, varB, r) {
+  document.getElementById('scatterOverlay').style.display = 'block';
+  document.getElementById('scatterTitle').textContent = `${varA.label} × ${varB.label} (r = ${r.toFixed(3)})`;
+  const el = document.getElementById('scatterMini');
+  el.innerHTML = '';
+  const s = [...filteredData].sort(() => Math.random()-0.5).slice(0, 400)
+    .map(d => ({ ...d, depressionNum: d.depression ? 1 : 0 }));
+  const W=320, H=200, m={top:10,right:10,bottom:32,left:40};
+  const w = W-m.left-m.right, h = H-m.top-m.bottom;
+  const x = d3.scaleLinear().domain(d3.extent(s, d => d[varA.key])).range([0,w]).nice();
+  const y = d3.scaleLinear().domain(d3.extent(s, d => d[varB.key])).range([h,0]).nice();
+  const svg = d3.select(el).append('svg').attr('width',W).attr('height',H)
+    .append('g').attr('transform', `translate(${m.left},${m.top})`);
+  svg.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(4))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','var(--muted)').attr('font-size','9px'); });
+  svg.append('g').call(d3.axisLeft(y).ticks(4))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','var(--muted)').attr('font-size','9px'); });
+  svg.selectAll('circle').data(s).enter().append('circle')
+    .attr('cx', d => x(d[varA.key])).attr('cy', d => y(d[varB.key]))
+    .attr('r', 2.5).attr('fill', d => d.depression ? 'var(--dep)' : 'var(--nodep)').attr('opacity', 0.5);
+}
+
+// ── Chart 5: Scatter explorer ─────────────────────────────────────────
+const SCATTER_VARS = [
+  {key:'study',            label:'Study Hours'},
+  {key:'sleep',            label:'Sleep Duration'},
+  {key:'stress',           label:'Stress Level'},
+  {key:'cgpa',             label:'CGPA'},
+  {key:'socialMedia',      label:'Social Media Hours'},
+  {key:'physicalActivity', label:'Physical Activity (norm.)'},
+];
+let scatterOpts = {reg:true, marg:true};
+let scatterXKey = 'study', scatterYKey = 'cgpa';
+
+function toggleScatterOption(opt) {
+  scatterOpts[opt] = !scatterOpts[opt];
+  document.getElementById(opt+'Btn').classList.toggle('active', scatterOpts[opt]);
+  renderChart5();
+}
+function updateScatter() {
+  scatterXKey = document.getElementById('scatterX').value;
+  scatterYKey = document.getElementById('scatterY').value;
+  renderChart5();
+}
+function initScatterSelects() {
+  const sx = document.getElementById('scatterX'), sy = document.getElementById('scatterY');
+  sx.innerHTML = ''; sy.innerHTML = '';
+  SCATTER_VARS.forEach(v => {
+    sx.innerHTML += `<option value="${v.key}"${v.key===scatterXKey?' selected':''}>${v.label}</option>`;
+    sy.innerHTML += `<option value="${v.key}"${v.key===scatterYKey?' selected':''}>${v.label}</option>`;
+  });
+}
+
+function renderChart5() {
+  const el = document.getElementById('chart5');
+  el.innerHTML = '';
+  const sample = [...filteredData].sort(() => Math.random()-0.5).slice(0, 500);
+  if (sample.length < 5) { el.innerHTML = '<div class="loading-placeholder">Not enough data</div>'; return; }
+
+  const dep   = sample.filter(d => d.depression);
+  const nodep = sample.filter(d => !d.depression);
+  const W = getContainerWidth(el);
+  const margSize = scatterOpts.marg ? 50 : 0;
+  const margin = { top: margSize+10, right: margSize+10, bottom:40, left:52 };
+  const H = Math.min(360, Math.max(200, Math.round(W * 0.65)));
+  const w = Math.max(50, W - margin.left - margin.right);
+  const h = Math.max(50, H - margin.top  - margin.bottom);
+
+  const x = d3.scaleLinear().domain(d3.extent(sample, d => d[scatterXKey])).range([0, w]).nice();
+  const y = d3.scaleLinear().domain(d3.extent(sample, d => d[scatterYKey])).range([h, 0]).nice();
+  const svg = d3.select(el).append('svg').attr('width', W).attr('height', H)
+    .append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  svg.append('g').attr('class','grid').call(d3.axisLeft(y).ticks(5).tickSize(-w).tickFormat('')).call(g => g.select('.domain').remove());
+  svg.append('g').attr('class','grid').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(5).tickSize(-h).tickFormat('')).call(g => g.select('.domain').remove());
+
+  svg.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(5))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','var(--muted)').attr('font-size','11px'); });
+  svg.append('g').call(d3.axisLeft(y).ticks(5))
+    .call(g => { g.select('.domain').remove(); g.selectAll('text').attr('fill','var(--muted)').attr('font-size','11px'); });
+
+  const xLabel = SCATTER_VARS.find(v => v.key === scatterXKey)?.label;
+  const yLabel = SCATTER_VARS.find(v => v.key === scatterYKey)?.label;
+  svg.append('text').attr('x', w/2).attr('y', h+34).attr('text-anchor','middle').attr('fill','var(--muted)').attr('font-size','11px').text(xLabel);
+  svg.append('text').attr('transform','rotate(-90)').attr('x',-h/2).attr('y',-40).attr('text-anchor','middle').attr('fill','var(--muted)').attr('font-size','11px').text(yLabel);
+
+  if (scatterOpts.reg) {
+    [[dep, 'var(--dep)'], [nodep, 'var(--nodep)']].forEach(([grp, col]) => {
+      if (grp.length < 3) return;
+      const xs = grp.map(d => d[scatterXKey]), ys = grp.map(d => d[scatterYKey]);
+      const mx = d3.mean(xs), my = d3.mean(ys);
+      const m = d3.sum(xs.map((v,i) => (v-mx)*(ys[i]-my))) / d3.sum(xs.map(v => (v-mx)**2));
+      const b = my - m*mx;
+      const [x1, x2] = x.domain();
+      svg.append('line')
+        .attr('x1', x(x1)).attr('y1', y(m*x1+b)).attr('x2', x(x2)).attr('y2', y(m*x2+b))
+        .attr('stroke', col).attr('stroke-width', 1.5).attr('stroke-dasharray','4,3').attr('opacity', 0.7);
+    });
+  }
+
+  svg.selectAll('.pt').data(sample).enter().append('circle').attr('class','pt')
+    .attr('cx', d => x(d[scatterXKey])).attr('cy', d => y(d[scatterYKey]))
+    .attr('r', 2.5).attr('fill', d => d.depression ? 'var(--dep)' : 'var(--nodep)').attr('opacity', 0.55)
+    .on('mouseover', (e, d) => showTip(
+      `<strong style="color:${d.depression?'var(--dep)':'var(--nodep)'}">${d.depression?'Depressed':'Not Depressed'}</strong><br>
+       ${xLabel}: ${(+d[scatterXKey]).toFixed(2)}<br>${yLabel}: ${(+d[scatterYKey]).toFixed(2)}<br>
+       Dept: ${d.dept} | CGPA: ${d.cgpa}`, e))
+    .on('mousemove', moveTip).on('mouseout', hideTip);
+
+  if (scatterOpts.marg) {
+    const topG = svg.append('g').attr('transform',`translate(0,${-margSize})`);
+    const xBins = d3.bin().domain(x.domain()).thresholds(15)(sample.map(d => d[scatterXKey]));
+    const topY  = d3.scaleLinear().domain([0, d3.max(xBins, d => d.length)]).range([margSize-4, 0]);
+    xBins.forEach(bin => {
+      topG.append('rect').attr('x', x(bin.x0)).attr('y', topY(bin.length))
+        .attr('width', Math.max(0, x(bin.x1)-x(bin.x0)-1)).attr('height', Math.max(0, margSize-4-topY(bin.length)))
+        .attr('fill','rgba(148,163,184,0.18)').attr('rx',1);
+    });
+    const rightG = svg.append('g').attr('transform',`translate(${w},0)`);
+    const yBins  = d3.bin().domain(y.domain()).thresholds(15)(sample.map(d => d[scatterYKey]));
+    const rightX = d3.scaleLinear().domain([0, d3.max(yBins, d => d.length)]).range([0, margSize-4]);
+    yBins.forEach(bin => {
+      rightG.append('rect').attr('x',0).attr('y', y(bin.x1))
+        .attr('width', Math.max(0, rightX(bin.length))).attr('height', Math.max(0, y(bin.x0)-y(bin.x1)-1))
+        .attr('fill','rgba(148,163,184,0.18)').attr('rx',1);
+    });
+  }
+
+  document.getElementById('corrBadge').innerHTML =
+    `r = ${pearson(sample.map(d => d[scatterXKey]), sample.map(d => d[scatterYKey])).toFixed(2)}`;
+}
+
+// ── Init & render all ─────────────────────────────────────────────────
+function renderAll() {
+  if (!allData || allData.length === 0) return;
+  renderHeaderStats();
+  renderChart1();
+  renderChart2();
+  renderChart4();
+  renderChart5();
+}
+
+// Re-render on resize with debounce
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (allData.length) renderAll(); }, 200);
+});
+</script>
 </body>
 </html>

@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q2 — Cross-Department Comparative Analysis</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f7f8fc;
+    --surface2: #eef0f8;
+    --border: #d8dce8;
+    --text: #1a1f3a;
+    --muted: #7a83aa;
+    --science:  #0099bb;
+    --engineering: #e05555;
+    --medical: #2ba85c;
+    --arts: #d48a20;
+    --business: #8b45c9;
+    --stem: #1a90c9;
+    --nonstem: #d9417a;
+    --accent: #5059d6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* Loading overlay */
+  #loadingOverlay {
+    position: fixed; inset: 0; background: #ffffff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 9999; gap: 20px;
+  }
+  #loadingOverlay.hidden { display: none; }
+  .loading-spinner {
+    width: 40px; height: 40px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  .loading-spinner.hidden { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loadingText { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); letter-spacing: 2px; }
+
+  /* File picker */
+  #filePicker {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 40px 48px; text-align: center;
+    box-shadow: 0 8px 32px rgba(80,89,214,0.08);
+  }
+  #filePicker .pick-icon { font-size: 36px; margin-bottom: 4px; }
+  #filePicker h2 { font-size: 18px; font-weight: 800; color: var(--text); }
+  #filePicker p { font-size: 13px; color: var(--muted); max-width: 300px; line-height: 1.5; }
+  #fileInput { display: none; }
+  .pick-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 24px; border-radius: 10px;
+    background: var(--accent); color: #fff;
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+    cursor: pointer; border: none; transition: opacity 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .pick-btn:hover { opacity: 0.88; }
+  #errorMsg { font-family: 'DM Mono', monospace; font-size: 11px; color: #e05555; letter-spacing: 1px; display: none; }
+
+  /* Header */
+  header {
+    padding: 52px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  .header-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 800;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #1a1f3a 0%, var(--accent) 60%, var(--stem) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 400;
+    max-width: 560px;
+    line-height: 1.6;
+  }
+
+  /* Dept legend */
+  .dept-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 48px;
+  }
+  .dept-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1px solid;
+    font-size: 13px;
+    font-weight: 600;
+    user-select: none;
+  }
+  .dept-chip .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .dept-chip[data-dept="Science"]     { border-color: var(--science);     color: var(--science);     background: rgba(0,153,187,0.07); }
+  .dept-chip[data-dept="Engineering"] { border-color: var(--engineering); color: var(--engineering); background: rgba(224,85,85,0.07); }
+  .dept-chip[data-dept="Medical"]     { border-color: var(--medical);     color: var(--medical);     background: rgba(43,168,92,0.07); }
+  .dept-chip[data-dept="Arts"]        { border-color: var(--arts);        color: var(--arts);        background: rgba(212,138,32,0.07); }
+  .dept-chip[data-dept="Business"]    { border-color: var(--business);    color: var(--business);    background: rgba(139,69,201,0.07); }
+
+  /* Section heading */
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .section-desc {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(80,89,214,0.3), transparent);
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .card-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 22px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Grid layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .span-2 { grid-column: span 2; }
+
+  section { margin-bottom: 60px; }
+
+  .grouped-bar-wrap { height: 380px; }
+
+  .stem-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    width: fit-content;
+    margin-bottom: 20px;
+  }
+  .stem-btn {
+    padding: 8px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Syne', sans-serif;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .stem-btn.active { background: var(--accent); color: #fff; }
+
+  .stem-panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .mirror-hist-canvas { height: 220px !important; }
+
+  .stat-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .stat-compare-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-label { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-bars { display: flex; flex-direction: column; gap: 5px; }
+  .stat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .stat-bar-row span:first-child { width: 70px; font-weight: 600; flex-shrink: 0; }
+  .stat-bar-bg { flex: 1; background: var(--border); border-radius: 3px; height: 7px; overflow: hidden; }
+  .stat-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+  .stat-val { width: 40px; text-align: right; font-family: 'DM Mono', monospace; color: var(--muted); font-size: 10px; }
+
+  #clusterCanvas { width: 100%; height: 340px; display: block; }
+
+  .metric-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .metric-pill {
+    padding: 5px 12px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'DM Mono', monospace;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .metric-pill.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .stats-ribbon {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+  }
+  .ribbon-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 22px;
+    flex: 1;
+    min-width: 150px;
+  }
+  .ribbon-num {
+    font-size: 26px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--stem));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .ribbon-label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; letter-spacing: 1px; text-transform: uppercase; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 50px 0; }
+
+  .custom-tooltip {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+    min-width: 140px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  }
+  .custom-tooltip.visible { display: block; }
+  .tooltip-dept { font-weight: 700; margin-bottom: 5px; }
+  .tooltip-row { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); }
+  .tooltip-row span:last-child { color: var(--text); font-family: 'DM Mono', monospace; }
+
+  @media (max-width: 900px) {
+    .grid-2, .stem-panel-row { grid-template-columns: 1fr; }
+    .span-2 { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay">
+  <div class="loading-spinner" id="spinner"></div>
+  <div id="loadingText">LOADING DATA...</div>
+  <div id="errorMsg" style="display:none;">⚠ Could not load CSV — please check the file.</div>
+</div>
+
+<div class="wrapper" id="mainContent" style="display:none;">
+
+  <header>
+    <div class="header-label">Question 2 · Phase 3</div>
+    <h1>Cross-Department<br>Comparative Analysis</h1>
+    <p>How do lifestyle factors, academic performance, and mental health differ across academic departments? Explore STEM vs Non-STEM splits, rankings, and clustering.</p>
+  </header>
+
+  <div class="stats-ribbon" id="statsRibbon">
+    <div class="ribbon-stat"><span class="ribbon-num" id="rb-total">—</span><span class="ribbon-label">Students</span></div>
+    <div class="ribbon-stat"><span class="ribbon-num">5</span><span class="ribbon-label">Departments</span></div>
+    <div class="ribbon-stat"><span class="ribbon-num" id="rb-cgpa">—</span><span class="ribbon-label">Highest CGPA</span></div>
+    <div class="ribbon-stat"><span class="ribbon-num" id="rb-dep">—</span><span class="ribbon-label">Most Depressed</span></div>
+    <div class="ribbon-stat"><span class="ribbon-num" id="rb-stress">—</span><span class="ribbon-label">Lowest Stress</span></div>
+    <div class="ribbon-stat"><span class="ribbon-num" id="rb-phys">—</span><span class="ribbon-label">Most Active</span></div>
+  </div>
+
+  <div class="dept-legend">
+    <div class="dept-chip" data-dept="Science"><span class="dot" style="background:var(--science)"></span>Science</div>
+    <div class="dept-chip" data-dept="Engineering"><span class="dot" style="background:var(--engineering)"></span>Engineering</div>
+    <div class="dept-chip" data-dept="Medical"><span class="dot" style="background:var(--medical)"></span>Medical</div>
+    <div class="dept-chip" data-dept="Arts"><span class="dot" style="background:var(--arts)"></span>Arts</div>
+    <div class="dept-chip" data-dept="Business"><span class="dot" style="background:var(--business)"></span>Business</div>
+  </div>
+
+  <section>
+    <div class="section-label">Chart 01 / 04</div>
+    <div class="section-title">Key Metrics by Department</div>
+    <div class="section-desc">Normalised z-score comparison of CGPA, Study Hours, and Sleep Duration across all five departments. Zero line = overall average.</div>
+    <div class="card">
+      <div class="card-title">Grouped Metric Comparison</div>
+      <div class="card-sub">Z-Score normalised · Higher = above average</div>
+      <div class="grouped-bar-wrap">
+        <canvas id="groupedBarChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section>
+    <div class="section-label">Chart 02 / 04</div>
+    <div class="section-title">STEM vs Non-STEM Analysis</div>
+    <div class="section-desc">Science + Engineering + Medical vs Arts + Business. Toggle between CGPA distribution and metric comparisons.</div>
+    <div class="stem-toggle">
+      <button class="stem-btn active" id="btnDist" onclick="showStemView('dist')">CGPA Distribution</button>
+      <button class="stem-btn" id="btnMetrics" onclick="showStemView('metrics')">All Metrics</button>
+    </div>
+    <div id="stemDistView">
+      <div class="card">
+        <div class="card-title">Mirrored CGPA Distribution</div>
+        <div class="card-sub">STEM above axis · Non-STEM below axis · % of group</div>
+        <canvas id="mirrorHistChart" class="mirror-hist-canvas"></canvas>
+      </div>
+    </div>
+    <div id="stemMetricsView" style="display:none;">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">STEM vs Non-STEM · All Metrics</div>
+          <div class="card-sub">Relative comparison — bars show group average</div>
+          <canvas id="stemRadarChart" style="max-height:300px;"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">Metric Breakdown</div>
+          <div class="card-sub">Absolute averages with visual bars</div>
+          <div class="stat-compare-grid" id="stemStatGrid"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section>
+    <div class="section-label">Chart 03 / 04</div>
+    <div class="section-title">Department Similarity Map</div>
+    <div class="section-desc">Force-directed graph based on Euclidean distance across all metrics. Closer nodes = more similar departments. Hover to see pairwise distances.</div>
+    <div class="card">
+      <div class="card-title">Similarity Clustering · Force-Directed</div>
+      <div class="card-sub">Distance computed from CGPA · Stress · Study · Sleep · Social · Physical Activity · Depression %</div>
+      <canvas id="clusterCanvas"></canvas>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section>
+    <div class="section-label">Chart 04 / 04</div>
+    <div class="section-title">Department Rankings Across Metrics</div>
+    <div class="section-desc">How department rankings shift across different performance metrics. Rank 1 = best, 5 = worst. Select metrics to include in the bump chart.</div>
+    <div class="metric-pills" id="metricPills"></div>
+    <div class="card">
+      <div class="card-title">Bump Chart — Rank Trajectories</div>
+      <div class="card-sub">Click metric pills above to add/remove · Lines show how rankings change</div>
+      <canvas id="slopeCanvas" style="height:400px;"></canvas>
+    </div>
+  </section>
+
+</div>
+
+<div class="custom-tooltip" id="tooltip">
+  <div class="tooltip-dept" id="tt-dept"></div>
+  <div id="tt-rows"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════
+const DEPTS = ['Science','Engineering','Medical','Arts','Business'];
+const COLORS = {
+  Science: '#0099bb', Engineering: '#e05555',
+  Medical: '#2ba85c', Arts: '#d48a20', Business: '#8b45c9'
+};
+const METRIC_LABELS = {
+  cgpa:'CGPA', stress:'Stress', study:'Study Hrs',
+  sleep:'Sleep Hrs', social:'Social Media', phys:'Physical Act.', dep:'Depression %'
+};
+
+Chart.defaults.color = '#7a83aa';
+Chart.defaults.font.family = "'Syne', sans-serif";
+
+// ═══════════════════════════════════════
+// DATA LOADING & COMPUTATION
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// CSV LOADING FROM FILE
+// ═══════════════════════════════════════
+async function loadCSVData() {
+  try {
+    const response = await fetch('students_updated.csv');
+    const text = await response.text();
+    const results = d3.csvParse(text);
+    
+    if (!results || results.length === 0) {
+      document.getElementById('loadingText').textContent = 'ERROR: No data found';
+      document.getElementById('errorMsg').style.display = 'block';
+      return;
+    }
+    processData(results);
+  } catch (error) {
+    console.error('Error loading CSV:', error);
+    document.getElementById('loadingText').textContent = 'ERROR: Could not load CSV';
+    document.getElementById('errorMsg').style.display = 'block';
+  }
+}
+
+// Auto-load data on page load
+window.addEventListener('DOMContentLoaded', loadCSVData);
+
+function processData(rows) {
+  // Group by department
+  const byDept = {};
+  DEPTS.forEach(d => byDept[d] = []);
+  rows.forEach(row => {
+    const dept = row['Department'] ? row['Department'].trim() : '';
+    if (byDept[dept]) {
+      byDept[dept].push({
+        cgpa:   parseFloat(row['CGPA']) || 0,
+        sleep:  parseFloat(row['Sleep_Duration']) || 0,
+        study:  parseFloat(row['Study_Hours']) || 0,
+        social: parseFloat(row['Social_Media_Hours']) || 0,
+        phys:   parseFloat(row['Physical_Activity']) || 0,
+        stress: parseFloat(row['Stress_Level']) || 0,
+        dep:    row['Depression'] && row['Depression'].trim().toLowerCase() === 'true' ? 1 : 0
+      });
+    }
+  });
+
+  // Compute averages
+  const AVGS = {};
+  const KEYS = ['cgpa','sleep','study','social','phys','stress'];
+  DEPTS.forEach(dept => {
+    const arr = byDept[dept];
+    const n = arr.length;
+    AVGS[dept] = {};
+    KEYS.forEach(k => {
+      AVGS[dept][k] = arr.reduce((s,r) => s + r[k], 0) / n;
+    });
+    AVGS[dept].dep = arr.reduce((s,r) => s + r.dep, 0) / n * 100;
+  });
+
+  // STEM vs Non-STEM averages
+  const STEM_DEPTS = ['Science','Engineering','Medical'];
+  const NONSTEM_DEPTS = ['Arts','Business'];
+  function groupAvg(deptList) {
+    const all = deptList.flatMap(d => byDept[d]);
+    const n = all.length;
+    const out = {};
+    KEYS.forEach(k => out[k] = all.reduce((s,r) => s + r[k], 0) / n);
+    out.dep = all.reduce((s,r) => s + r.dep, 0) / n * 100;
+    return out;
+  }
+  const STEM_AVGS = groupAvg(STEM_DEPTS);
+  const NONSTEM_AVGS = groupAvg(NONSTEM_DEPTS);
+
+  // CGPA bins
+  const CGPA_BINS = [];
+  for (let i = 0; i < 12; i++) CGPA_BINS.push((1.6 + i * 0.2).toFixed(1));
+
+  function cgpaDist(deptList) {
+    const all = deptList.flatMap(d => byDept[d]);
+    const n = all.length;
+    const counts = new Array(12).fill(0);
+    all.forEach(r => {
+      const idx = Math.min(Math.floor((r.cgpa - 1.6) / 0.2), 11);
+      if (idx >= 0 && idx < 12) counts[idx]++;
+    });
+    return counts.map(c => parseFloat((c / n * 100).toFixed(2)));
+  }
+  const STEM_CGPA = cgpaDist(STEM_DEPTS);
+  const NONSTEM_CGPA = cgpaDist(NONSTEM_DEPTS);
+
+  // Rankings (1 = best)
+  function rankDepts(key, higherBetter) {
+    const sorted = [...DEPTS].sort((a, b) => higherBetter ? AVGS[b][key] - AVGS[a][key] : AVGS[a][key] - AVGS[b][key]);
+    const r = {};
+    sorted.forEach((d, i) => r[d] = i + 1);
+    return r;
+  }
+  const RANKINGS = {
+    cgpa:   rankDepts('cgpa',   true),
+    stress: rankDepts('stress', false),
+    study:  rankDepts('study',  true),
+    sleep:  rankDepts('sleep',  true),
+    social: rankDepts('social', false),
+    phys:   rankDepts('phys',   true),
+    dep:    rankDepts('dep',    false),
+  };
+
+  // Euclidean distances (normalised)
+  const ALL_KEYS = ['cgpa','stress','study','sleep','social','phys','dep'];
+  const ranges = {};
+  ALL_KEYS.forEach(k => {
+    const vals = DEPTS.map(d => AVGS[d][k]);
+    ranges[k] = { min: Math.min(...vals), max: Math.max(...vals) };
+  });
+  function normVal(dept, k) {
+    const { min, max } = ranges[k];
+    return max === min ? 0 : (AVGS[dept][k] - min) / (max - min);
+  }
+  const DISTANCES = {};
+  DEPTS.forEach(d1 => {
+    DISTANCES[d1] = {};
+    DEPTS.forEach(d2 => {
+      const dist = Math.sqrt(ALL_KEYS.reduce((s, k) => s + (normVal(d1,k) - normVal(d2,k))**2, 0));
+      DISTANCES[d1][d2] = parseFloat(dist.toFixed(4));
+    });
+  });
+
+  // Summary stats for ribbon
+  const total = rows.length;
+  const highestCGPA = DEPTS.reduce((a,b) => AVGS[a].cgpa > AVGS[b].cgpa ? a : b);
+  const mostDep     = DEPTS.reduce((a,b) => AVGS[a].dep  > AVGS[b].dep  ? a : b);
+  const lowestStress= DEPTS.reduce((a,b) => AVGS[a].stress < AVGS[b].stress ? a : b);
+  const mostPhys    = DEPTS.reduce((a,b) => AVGS[a].phys > AVGS[b].phys ? a : b);
+
+  document.getElementById('rb-total').textContent  = (total / 1000).toFixed(0) + 'K';
+  document.getElementById('rb-cgpa').textContent   = highestCGPA;
+  document.getElementById('rb-dep').textContent    = mostDep;
+  document.getElementById('rb-stress').textContent = lowestStress;
+  document.getElementById('rb-phys').textContent   = mostPhys;
+
+  // Hide loader, show content
+  document.getElementById('loadingOverlay').classList.add('hidden');
+  document.getElementById('mainContent').style.display = '';
+
+  // Render all charts
+  renderGroupedBar(AVGS);
+  renderMirrorHist(CGPA_BINS, STEM_CGPA, NONSTEM_CGPA);
+  renderStemRadar(STEM_AVGS, NONSTEM_AVGS);
+  renderStemStatGrid(STEM_AVGS, NONSTEM_AVGS);
+  renderCluster(DISTANCES);
+  initBumpChart(RANKINGS);
+}
+
+// ═══════════════════════════════════════
+// CHART 1: Grouped Bar (Z-Score)
+// ═══════════════════════════════════════
+function renderGroupedBar(AVGS) {
+  const metrics = ['cgpa','study','sleep'];
+  const mLabels = ['CGPA','Study Hours','Sleep Duration'];
+  const mColors = ['#5059d6','#d48a20','#0099bb'];
+  const mAlpha  = ['rgba(80,89,214,0.65)','rgba(212,138,32,0.65)','rgba(0,153,187,0.65)'];
+
+  function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+  function std(arr){ const m=mean(arr); return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length); }
+
+  const datasets = metrics.map((m,i) => {
+    const vals = DEPTS.map(d => AVGS[d][m]);
+    const mu = mean(vals), sigma = std(vals);
+    return {
+      label: mLabels[i],
+      data: DEPTS.map(d => parseFloat(((AVGS[d][m]-mu)/sigma).toFixed(3))),
+      backgroundColor: mAlpha[i],
+      borderColor: mColors[i],
+      borderWidth: 2,
+      borderRadius: 5,
+      borderSkipped: false
+    };
+  });
+
+  new Chart(document.getElementById('groupedBarChart'), {
+    type: 'bar',
+    data: { labels: DEPTS, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { color: '#5a6080', font: { size: 12, weight: '600' }, padding: 20, boxWidth: 14, boxHeight: 14 } },
+        tooltip: {
+          backgroundColor: '#f7f8fc', titleColor: '#1a1f3a', bodyColor: '#5a6080',
+          borderColor: '#d8dce8', borderWidth: 1, padding: 12,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y > 0 ? '+' : ''}${ctx.parsed.y.toFixed(3)} σ` }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#eaedf5' }, ticks: { color: '#5a6080', font: { size: 12, weight: '600' } } },
+        y: {
+          grid: { color: '#eaedf5' },
+          ticks: { color: '#7a83aa', font: { size: 11 }, callback: v => (v>0?'+':'')+v+'σ' },
+          title: { display: true, text: 'Z-Score (σ from mean)', color: '#9ba8d4', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// CHART 2a: Mirror Histogram
+// ═══════════════════════════════════════
+function renderMirrorHist(CGPA_BINS, STEM_CGPA, NONSTEM_CGPA) {
+  new Chart(document.getElementById('mirrorHistChart'), {
+    type: 'bar',
+    data: {
+      labels: CGPA_BINS,
+      datasets: [
+        { label: 'STEM (above)', data: STEM_CGPA, backgroundColor: 'rgba(26,144,201,0.6)', borderColor: '#1a90c9', borderWidth: 1.5, borderRadius: 3, borderSkipped: false },
+        { label: 'Non-STEM (below)', data: NONSTEM_CGPA.map(v => -v), backgroundColor: 'rgba(217,65,122,0.6)', borderColor: '#d9417a', borderWidth: 1.5, borderRadius: 3, borderSkipped: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { color: '#5a6080', font: { size: 12, weight: '600' }, padding: 20 } },
+        tooltip: {
+          backgroundColor: '#f7f8fc', titleColor: '#1a1f3a', bodyColor: '#5a6080',
+          borderColor: '#d8dce8', borderWidth: 1, padding: 10,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${Math.abs(ctx.parsed.y).toFixed(2)}%` }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#eaedf5' }, ticks: { color: '#7a83aa', font: { size: 11 } }, title: { display: true, text: 'CGPA Range', color: '#9ba8d4', font: { size: 11 } } },
+        y: {
+          grid: { color: '#eaedf5' },
+          ticks: { color: '#7a83aa', font: { size: 11 }, callback: v => Math.abs(v).toFixed(0) + '%' },
+          title: { display: true, text: '% of Group', color: '#9ba8d4', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// CHART 2b: STEM Radar
+// ═══════════════════════════════════════
+function renderStemRadar(STEM_AVGS, NONSTEM_AVGS) {
+  const radarMetrics = ['cgpa','stress','study','sleep','social','phys'];
+  const radarLabels = ['CGPA','Stress','Study Hrs','Sleep Hrs','Social Media','Physical Act.'];
+
+  const ranges = {
+    cgpa:[2.894,2.906], stress:[4.12,4.15], study:[4.47,4.56],
+    sleep:[6.99,7.01], social:[3.495,3.51], phys:[73.8,74.9]
+  };
+  function norm(val, m) {
+    return Math.max(0, Math.min(100, (val - ranges[m][0]) / (ranges[m][1] - ranges[m][0]) * 100));
+  }
+
+  new Chart(document.getElementById('stemRadarChart'), {
+    type: 'radar',
+    data: {
+      labels: radarLabels,
+      datasets: [
+        { label: 'STEM', data: radarMetrics.map(m => +norm(STEM_AVGS[m], m).toFixed(1)), backgroundColor: 'rgba(26,144,201,0.12)', borderColor: '#1a90c9', borderWidth: 2.5, pointBackgroundColor: '#1a90c9', pointRadius: 5 },
+        { label: 'Non-STEM', data: radarMetrics.map(m => +norm(NONSTEM_AVGS[m], m).toFixed(1)), backgroundColor: 'rgba(217,65,122,0.12)', borderColor: '#d9417a', borderWidth: 2.5, pointBackgroundColor: '#d9417a', pointRadius: 5 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'top', labels: { color: '#5a6080', font: { size: 12, weight: '600' }, padding: 16 } },
+        tooltip: { backgroundColor: '#f7f8fc', titleColor: '#1a1f3a', bodyColor: '#5a6080', borderColor: '#d8dce8', borderWidth: 1, padding: 10 }
+      },
+      scales: {
+        r: {
+          backgroundColor: 'rgba(247,248,252,0.8)',
+          grid: { color: '#dde0ee' },
+          angleLines: { color: '#dde0ee' },
+          ticks: { display: false },
+          pointLabels: { color: '#5a6080', font: { size: 11, weight: '600' } }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// STEM Stat Grid
+// ═══════════════════════════════════════
+function renderStemStatGrid(STEM_AVGS, NONSTEM_AVGS) {
+  const metrics = [
+    { key:'cgpa',   label:'CGPA',          format: v=>v.toFixed(3), max: 4 },
+    { key:'study',  label:'Study Hrs',     format: v=>v.toFixed(2), max: 8 },
+    { key:'sleep',  label:'Sleep Hrs',     format: v=>v.toFixed(3), max: 10 },
+    { key:'stress', label:'Stress Level',  format: v=>v.toFixed(3), max: 10 },
+    { key:'social', label:'Social Media',  format: v=>v.toFixed(3), max: 8 },
+    { key:'phys',   label:'Physical Act.', format: v=>v.toFixed(1), max: 120 },
+    { key:'dep',    label:'Depression %',  format: v=>v.toFixed(2)+'%', max: 20 }
+  ];
+  const grid = document.getElementById('stemStatGrid');
+  metrics.forEach(m => {
+    const sv = STEM_AVGS[m.key], nv = NONSTEM_AVGS[m.key];
+    const sw = (sv/m.max*100).toFixed(1), nw = (nv/m.max*100).toFixed(1);
+    grid.innerHTML += `
+    <div class="stat-compare-item">
+      <div class="stat-label">${m.label}</div>
+      <div class="stat-bars">
+        <div class="stat-bar-row">
+          <span style="color:#1a90c9;font-size:10px;">STEM</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${sw}%;background:#1a90c9;"></div></div>
+          <span class="stat-val">${m.format(sv)}</span>
+        </div>
+        <div class="stat-bar-row">
+          <span style="color:#d9417a;font-size:10px;">Non-STEM</span>
+          <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${nw}%;background:#d9417a;"></div></div>
+          <span class="stat-val">${m.format(nv)}</span>
+        </div>
+      </div>
+    </div>`;
+  });
+}
+
+function showStemView(v) {
+  document.getElementById('stemDistView').style.display = v==='dist' ? '' : 'none';
+  document.getElementById('stemMetricsView').style.display = v==='metrics' ? '' : 'none';
+  document.getElementById('btnDist').classList.toggle('active', v==='dist');
+  document.getElementById('btnMetrics').classList.toggle('active', v==='metrics');
+}
+
+// ═══════════════════════════════════════
+// CHART 3: Force-Directed Clustering
+// ═══════════════════════════════════════
+function renderCluster(DISTANCES) {
+  const canvas = document.getElementById('clusterCanvas');
+  const W = canvas.offsetWidth || 900;
+  const H = 340;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const nodes = {
+    Science:     { x: W*0.2, y: H*0.3, vx:0, vy:0 },
+    Engineering: { x: W*0.5, y: H*0.2, vx:0, vy:0 },
+    Medical:     { x: W*0.35, y: H*0.6, vx:0, vy:0 },
+    Arts:        { x: W*0.65, y: H*0.7, vx:0, vy:0 },
+    Business:    { x: W*0.8, y: H*0.4, vx:0, vy:0 }
+  };
+
+  const maxDist = Math.max(...DEPTS.flatMap(d1 => DEPTS.map(d2 => DISTANCES[d1][d2])));
+  function springLen(d1, d2) {
+    return (DISTANCES[d1][d2] / maxDist) * H * 0.55 + 60;
+  }
+
+  function simulate() {
+    for(let i=0; i<DEPTS.length; i++) {
+      for(let j=i+1; j<DEPTS.length; j++) {
+        const a = nodes[DEPTS[i]], b = nodes[DEPTS[j]];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx*dx+dy*dy)||1;
+        const target = springLen(DEPTS[i], DEPTS[j]);
+        const force = (d - target) * 0.015;
+        const fx = (dx/d)*force, fy = (dy/d)*force;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+      }
+    }
+    DEPTS.forEach(d => {
+      nodes[d].vx += (W/2 - nodes[d].x) * 0.003;
+      nodes[d].vy += (H/2 - nodes[d].y) * 0.003;
+      nodes[d].vx *= 0.82; nodes[d].vy *= 0.82;
+      nodes[d].x += nodes[d].vx; nodes[d].y += nodes[d].vy;
+      nodes[d].x = Math.max(60, Math.min(W-60, nodes[d].x));
+      nodes[d].y = Math.max(40, Math.min(H-40, nodes[d].y));
+    });
+  }
+
+  function drawGraph() {
+    ctx.clearRect(0,0,W,H);
+    // Draw edges
+    for(let i=0; i<DEPTS.length; i++) {
+      for(let j=i+1; j<DEPTS.length; j++) {
+        const a = nodes[DEPTS[i]], b = nodes[DEPTS[j]];
+        const dist = DISTANCES[DEPTS[i]][DEPTS[j]];
+        const opacity = Math.max(0.05, 1 - dist/2.0);
+        const thickness = Math.max(0.5, (2 - dist) * 2.5);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = `rgba(60,70,160,${Math.max(0.25, opacity*0.75)})`;
+        ctx.lineWidth = Math.max(1.5, thickness);
+        ctx.stroke();
+        const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+        // White halo behind label for readability
+        ctx.font = `700 11px 'DM Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.lineWidth = 4;
+        ctx.strokeText(dist.toFixed(2), mx, my);
+        ctx.fillStyle = `rgba(40,50,120,${Math.max(0.7, opacity)})`;
+        ctx.fillText(dist.toFixed(2), mx, my);
+      }
+    }
+    // Draw nodes
+    DEPTS.forEach(d => {
+      const n = nodes[d];
+      const col = COLORS[d];
+      const hex = col.replace('#','');
+      const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+      const grd = ctx.createRadialGradient(n.x,n.y,5, n.x,n.y,35);
+      grd.addColorStop(0, `rgba(${r},${g},${b},0.18)`);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(n.x, n.y, 35, 0, Math.PI*2);
+      ctx.fillStyle = grd; ctx.fill();
+      ctx.beginPath(); ctx.arc(n.x, n.y, 22, 0, Math.PI*2);
+      ctx.fillStyle = '#ffffff'; ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.font = `700 12px 'Syne', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(d.substring(0,3).toUpperCase(), n.x, n.y+4);
+      ctx.fillStyle = '#9ba8d4';
+      ctx.font = `400 9px 'DM Mono', monospace`;
+      ctx.fillText(d, n.x, n.y+38);
+    });
+  }
+
+  let settled = 0;
+  function animate() {
+    simulate(); drawGraph(); settled++;
+    if(settled < 200) requestAnimationFrame(animate);
+    else drawGraph();
+  }
+  animate();
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const tt = document.getElementById('tooltip');
+    let found = null;
+    DEPTS.forEach(d => { if(Math.hypot(mx-nodes[d].x, my-nodes[d].y) < 28) found = d; });
+    if(found) {
+      const distRow = DEPTS.filter(d=>d!==found).map(d =>
+        `<div class="tooltip-row"><span>${d}</span><span>dist: ${DISTANCES[found][d].toFixed(3)}</span></div>`
+      ).join('');
+      document.getElementById('tt-dept').style.color = COLORS[found];
+      document.getElementById('tt-dept').textContent = found;
+      document.getElementById('tt-rows').innerHTML = distRow;
+      tt.style.left = (e.clientX+14)+'px';
+      tt.style.top = (e.clientY-10)+'px';
+      tt.classList.add('visible');
+    } else {
+      tt.classList.remove('visible');
+    }
+  });
+  canvas.addEventListener('mouseleave', () => document.getElementById('tooltip').classList.remove('visible'));
+  window.addEventListener('resize', () => { canvas.width = canvas.offsetWidth; drawGraph(); });
+}
+
+// ═══════════════════════════════════════
+// CHART 4: Bump / Slope Chart
+// ═══════════════════════════════════════
+let activeMetrics = ['cgpa','study','sleep','stress','dep'];
+let _RANKINGS;
+
+function initBumpChart(RANKINGS) {
+  _RANKINGS = RANKINGS;
+  buildPills();
+  setTimeout(() => drawSlopeChart(), 100);
+}
+
+function buildPills() {
+  const pills = document.getElementById('metricPills');
+  pills.innerHTML = '';
+  Object.keys(METRIC_LABELS).forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'metric-pill' + (activeMetrics.includes(m) ? ' active' : '');
+    btn.textContent = METRIC_LABELS[m];
+    btn.onclick = () => {
+      if(activeMetrics.includes(m)) {
+        if(activeMetrics.length > 2) activeMetrics = activeMetrics.filter(x=>x!==m);
+      } else {
+        activeMetrics.push(m);
+      }
+      buildPills();
+      drawSlopeChart();
+    };
+    pills.appendChild(btn);
+  });
+}
+
+function drawSlopeChart() {
+  const canvas = document.getElementById('slopeCanvas');
+  const W = canvas.offsetWidth || 900;
+  const H = 400;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  const pad = { l: 80, r: 110, t: 30, b: 60 };
+  const chartW = W - pad.l - pad.r;
+  const chartH = H - pad.t - pad.b;
+  const n = activeMetrics.length;
+  const colStep = n > 1 ? chartW / (n-1) : chartW/2;
+
+  function yPos(rank) { return pad.t + (rank-1)/(5-1) * chartH; }
+  function xPos(i) { return pad.l + i * colStep; }
+
+  // Grid
+  for(let r=1; r<=5; r++) {
+    const y = yPos(r);
+    ctx.beginPath(); ctx.moveTo(pad.l-15, y); ctx.lineTo(W-pad.r+15, y);
+    ctx.strokeStyle = '#eaedf5'; ctx.lineWidth = 1; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#bbbfd0'; ctx.font = `500 10px 'DM Mono', monospace`; ctx.textAlign = 'right';
+    ctx.fillText(`#${r}`, pad.l-20, y+4);
+  }
+
+  activeMetrics.forEach((m, i) => {
+    const x = xPos(i);
+    ctx.fillStyle = '#7a83aa'; ctx.font = `600 11px 'Syne', sans-serif`; ctx.textAlign = 'center';
+    ctx.fillText(METRIC_LABELS[m], x, H-18);
+    ctx.beginPath(); ctx.moveTo(x, pad.t-10); ctx.lineTo(x, H-pad.b+10);
+    ctx.strokeStyle = 'rgba(216,220,232,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  DEPTS.forEach(dept => {
+    const col = COLORS[dept];
+    ctx.save();
+    ctx.strokeStyle = col; ctx.lineWidth = 2.5;
+    ctx.shadowColor = col; ctx.shadowBlur = 4;
+    ctx.beginPath();
+    activeMetrics.forEach((m, i) => {
+      const x = xPos(i), y = yPos(_RANKINGS[m][dept]);
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    activeMetrics.forEach((m, i) => {
+      const rank = _RANKINGS[m][dept];
+      const x = xPos(i), y = yPos(rank);
+      ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = `700 9px 'Syne', sans-serif`; ctx.textAlign = 'center';
+      ctx.fillText(rank, x, y+3);
+    });
+
+    if(n > 0) {
+      const lastMetric = activeMetrics[n-1];
+      const rank = _RANKINGS[lastMetric][dept];
+      ctx.fillStyle = col; ctx.font = `600 11px 'Syne', sans-serif`; ctx.textAlign = 'left';
+      ctx.fillText(dept, xPos(n-1)+16, yPos(rank)+4);
+    }
+  });
+
+  ctx.fillStyle = '#bbbfd0'; ctx.font = `500 10px 'DM Mono', monospace`; ctx.textAlign = 'left';
+  ctx.fillText('RANK 1 = BEST', pad.l, pad.t-12);
+}
+
+window.addEventListener('resize', () => {
+  if (_RANKINGS) drawSlopeChart();
+  const cc = document.getElementById('clusterCanvas');
+  if (cc) { cc.width = cc.offsetWidth; }
+});
+</script>
+</body>
+</html>
